@@ -1,34 +1,9 @@
-use chrono::NaiveDate;
+use chrono::{Datelike, NaiveDate};
 use fantoccini::elements::Element;
 use fantoccini::{ClientBuilder, Locator};
 use std::error::Error;
 use std::time::Duration;
 use std::{dbg, eprintln, format};
-
-#[derive(Debug, Clone, Copy)]
-enum Bin {
-    Black,
-    Blue,
-    Brown,
-    Green,
-}
-
-#[derive(Debug)]
-struct BinDates {
-    bin: Bin,
-    dates: Vec<NaiveDate>,
-}
-
-#[derive(Debug)]
-struct NextBinCollection {
-    bins: Vec<NextBinCollectionDay>,
-}
-
-#[derive(Debug, Clone, Copy)]
-struct NextBinCollectionDay {
-    bin: Bin,
-    date: NaiveDate,
-}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -139,9 +114,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let brown_bin_dates = get_bin_dates_from_elements(&brown_bin_date_elements).await?;
     let green_bin_dates = get_bin_dates_from_elements(&green_bin_date_elements).await?;
 
-    // TODO(reece): Update the collection date dynamically
-    let collection_date = chrono::NaiveDate::parse_from_str("2023-07-30", "%Y-%m-%d")?;
-
     let parsed_black_bin_dates = parse_bin_dates(&black_bin_dates);
     let black_bins = BinDates {
         bin: Bin::Black,
@@ -165,9 +137,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let bins = [black_bins, blue_bins, brown_bins, green_bins];
 
+    let today = chrono::Utc::now().date_naive();
+    let next_collection_date = next_collection_date_from(today);
+
+    dbg!(next_collection_date);
     let mut next_collection_day_for_bins = Vec::new();
     for bin in bins {
-        let next_day = next_collection_date_for_bin(&bin, collection_date);
+        let next_day = next_collection_date_for_bin(&bin, next_collection_date);
         next_collection_day_for_bins.push(next_day);
     }
 
@@ -233,7 +209,7 @@ fn calculate_differences_from_date(
             date: *date,
             how_far_from_target: *date - target_date,
         })
-        .filter(|time_from_target| time_from_target.how_far_from_target.num_seconds() > 0)
+        .filter(|time_from_target| time_from_target.how_far_from_target.num_seconds() >= 0)
         .collect();
     return differences;
 }
@@ -253,4 +229,88 @@ fn next_collection_date_for_bin(
         bin: bin_dates.bin,
         date: closest_day.date,
     };
+}
+
+/// Assuming monday is collection day for time being
+fn next_collection_date_from(date: NaiveDate) -> NaiveDate {
+    let date_weekday = date.weekday();
+
+    let days_from_monday =
+        chrono::Duration::days(chrono::Weekday::num_days_from_monday(&date_weekday) as i64);
+    let number_of_days_in_week = chrono::Duration::days(7);
+    let days_till_monday = number_of_days_in_week - days_from_monday;
+    dbg!(days_till_monday.num_days());
+
+    return date + days_till_monday;
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Bin {
+    Black,
+    Blue,
+    Brown,
+    Green,
+}
+
+#[derive(Debug)]
+struct BinDates {
+    bin: Bin,
+    dates: Vec<NaiveDate>,
+}
+
+#[derive(Debug)]
+struct NextBinCollection {
+    bins: Vec<NextBinCollectionDay>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct NextBinCollectionDay {
+    bin: Bin,
+    date: NaiveDate,
+}
+
+#[cfg(test)]
+mod tests {
+    use std::assert_eq;
+
+    use crate::*;
+
+    #[test]
+    fn date_difference_calculation_considers_same_day() {
+        let target_date = chrono::Utc::now().date_naive();
+        let stuff = calculate_differences_from_date(&[target_date], target_date);
+
+        assert_eq!(stuff.len(), 1);
+        assert_eq!(stuff[0].how_far_from_target, chrono::Duration::days(0));
+    }
+
+    mod next_collection_date {
+        use crate::next_collection_date_from;
+
+        #[test]
+        fn it_calculates_next_monday_collection_date() {
+            let date = "2023-07-28";
+            let date = chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").unwrap();
+            let next_collection_date = next_collection_date_from(date);
+
+            let expected_collection_date = "2023-07-31";
+            let expected_collection_date =
+                chrono::NaiveDate::parse_from_str(&expected_collection_date, "%Y-%m-%d").unwrap();
+
+            assert_eq!(next_collection_date, expected_collection_date);
+        }
+
+        #[test]
+        fn same_day_of_week_calculates_next_week() {
+            let date = "2023-07-31";
+            let date = chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").unwrap();
+            let next_collection_date = next_collection_date_from(date);
+
+            let expected_collection_date = "2023-08-07";
+            let expected_collection_date =
+                chrono::NaiveDate::parse_from_str(&expected_collection_date, "%Y-%m-%d").unwrap();
+
+            assert_eq!(next_collection_date, expected_collection_date);
+        }
+    }
 }
