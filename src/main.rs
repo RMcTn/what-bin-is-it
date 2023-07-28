@@ -5,6 +5,31 @@ use std::error::Error;
 use std::time::Duration;
 use std::{dbg, eprintln, format};
 
+#[derive(Debug, Clone, Copy)]
+enum Bin {
+    Black,
+    Blue,
+    Brown,
+    Green,
+}
+
+#[derive(Debug)]
+struct BinDates {
+    bin: Bin,
+    dates: Vec<NaiveDate>,
+}
+
+#[derive(Debug)]
+struct NextBinCollection {
+    bins: Vec<NextBinCollectionDay>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct NextBinCollectionDay {
+    bin: Bin,
+    date: NaiveDate,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     // NOTE: Some of the fields get different IDs when submitting each step it seems
@@ -105,51 +130,62 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let brown_bin_date_elements = brown_bins_div.find_all(Locator::Css("p")).await?;
     let green_bin_date_elements = green_bins_div.find_all(Locator::Css("p")).await?;
 
+    // TODO - Clean this up
     let black_bin_dates = get_bin_dates_from_elements(&black_bin_date_elements).await?;
     let blue_bin_dates = get_bin_dates_from_elements(&blue_bin_date_elements).await?;
     let brown_bin_dates = get_bin_dates_from_elements(&brown_bin_date_elements).await?;
     let green_bin_dates = get_bin_dates_from_elements(&green_bin_date_elements).await?;
 
-    let parsed_dates = parse_bin_dates(&black_bin_dates);
-    dbg!(&parsed_dates);
-
+    // TODO(reece): Update the collection date dynamically
     let collection_date = chrono::NaiveDate::parse_from_str("2023-07-30", "%Y-%m-%d")?;
-    dbg!(collection_date);
-
-    let differences = calculate_differences_from_date(&parsed_dates, collection_date);
-
-    dbg!(&differences);
 
     let parsed_black_bin_dates = parse_bin_dates(&black_bin_dates);
+    let black_bins = BinDates {
+        bin: Bin::Black,
+        dates: parsed_black_bin_dates,
+    };
     let parsed_blue_bin_dates = parse_bin_dates(&blue_bin_dates);
+    let blue_bins = BinDates {
+        bin: Bin::Blue,
+        dates: parsed_blue_bin_dates,
+    };
     let parsed_brown_bin_dates = parse_bin_dates(&brown_bin_dates);
+    let brown_bins = BinDates {
+        bin: Bin::Brown,
+        dates: parsed_brown_bin_dates,
+    };
     let parsed_green_bin_dates = parse_bin_dates(&green_bin_dates);
+    let green_bins = BinDates {
+        bin: Bin::Green,
+        dates: parsed_green_bin_dates,
+    };
 
-    let closest_black_bin_day =
-        closest_date_to_target_date(&parsed_black_bin_dates, collection_date);
-    let closest_blue_bin_day = closest_date_to_target_date(&parsed_blue_bin_dates, collection_date);
-    let closest_brown_bin_day =
-        closest_date_to_target_date(&parsed_brown_bin_dates, collection_date);
-    let closest_green_bin_day =
-        closest_date_to_target_date(&parsed_green_bin_dates, collection_date);
+    let bins = [black_bins, blue_bins, brown_bins, green_bins];
 
-    dbg!(closest_black_bin_day);
-    dbg!(closest_blue_bin_day);
-    dbg!(closest_brown_bin_day);
-    dbg!(closest_green_bin_day);
+    let mut next_collection_day_for_bins = Vec::new();
+    for bin in bins {
+        let next_day = next_collection_date_for_bin(&bin, collection_date);
+        next_collection_day_for_bins.push(next_day);
+    }
 
-    let closest_days = [
-        closest_black_bin_day,
-        closest_blue_bin_day,
-        closest_brown_bin_day,
-        closest_green_bin_day,
-    ];
+    let mut closest_bin_day = next_collection_day_for_bins[0];
+    let mut closest_bin_days = Vec::new();
+    for bin_day in next_collection_day_for_bins {
+        if bin_day.date == closest_bin_day.date {
+            closest_bin_days.push(bin_day);
+        }
+        if bin_day.date < closest_bin_day.date {
+            closest_bin_day = bin_day;
+            closest_bin_days.clear();
+            closest_bin_days.push(bin_day);
+        }
+    }
 
-    // TODO: There can be 2 bins on a single day
+    let next_bin_collection = NextBinCollection {
+        bins: closest_bin_days,
+    };
 
-    let closest_day = closest_days.iter().min().unwrap();
-
-    dbg!(closest_day);
+    dbg!(next_bin_collection);
 
     return Ok(());
 }
@@ -176,22 +212,42 @@ fn parse_bin_dates(bin_date_strings: &[String]) -> Vec<NaiveDate> {
     return parsed_dates;
 }
 
+#[derive(Debug)]
+struct TimeFromTarget {
+    _target_date: NaiveDate,
+    date: NaiveDate,
+    how_far_from_target: chrono::Duration,
+}
 /// Filters out negatives (i.e dates from before the target_date)
 fn calculate_differences_from_date(
     dates: &[NaiveDate],
     target_date: NaiveDate,
-) -> Vec<chrono::Duration> {
-    let differences: Vec<chrono::Duration> = dates
+) -> Vec<TimeFromTarget> {
+    let differences: Vec<TimeFromTarget> = dates
         .iter()
-        .map(|date| *date - target_date)
-        .filter(|duration| duration.num_seconds() > 0)
+        .map(|date| TimeFromTarget {
+            _target_date: target_date,
+            date: *date,
+            how_far_from_target: *date - target_date,
+        })
+        .filter(|time_from_target| time_from_target.how_far_from_target.num_seconds() > 0)
         .collect();
     return differences;
 }
 
-fn closest_date_to_target_date(dates: &[NaiveDate], target_date: NaiveDate) -> chrono::Duration {
-    return *calculate_differences_from_date(dates, target_date)
+fn next_collection_date_for_bin(
+    bin_dates: &BinDates,
+    target_date: NaiveDate,
+) -> NextBinCollectionDay {
+    let diffs = calculate_differences_from_date(&bin_dates.dates, target_date);
+
+    let closest_day = diffs
         .iter()
-        .min()
+        .min_by(|x, y| x.how_far_from_target.cmp(&y.how_far_from_target))
         .unwrap();
+
+    return NextBinCollectionDay {
+        bin: bin_dates.bin,
+        date: closest_day.date,
+    };
 }
