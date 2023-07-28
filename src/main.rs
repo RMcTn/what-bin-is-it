@@ -67,6 +67,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     dbg!("Clicked postcode input box");
     // Enter key doesn't submit this form
     postcode_input.send_keys(postcode).await?;
+    // TODO - Check the input box to make sure a value is selected (or rely on the confirm part
+    // after?)
 
     dbg!("Waiting for find address button");
     client
@@ -131,6 +133,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let green_bin_date_elements = green_bins_div.find_all(Locator::Css("p")).await?;
 
     // TODO - Clean this up
+
     let black_bin_dates = get_bin_dates_from_elements(&black_bin_date_elements).await?;
     let blue_bin_dates = get_bin_dates_from_elements(&blue_bin_date_elements).await?;
     let brown_bin_dates = get_bin_dates_from_elements(&brown_bin_date_elements).await?;
