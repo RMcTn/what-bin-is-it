@@ -189,7 +189,7 @@ async fn get_bin_dates_from_elements(
 fn parse_bin_dates(bin_date_strings: &[String]) -> Vec<NaiveDate> {
     let mut parsed_dates = Vec::new();
     for date in bin_date_strings {
-        match chrono::NaiveDate::parse_from_str(&date, "%d %B %Y") {
+        match chrono::NaiveDate::parse_from_str(date, "%d %B %Y") {
             Ok(parsed_date) => parsed_dates.push(parsed_date),
             Err(e) => eprintln!("Error parsing {}: {}", date, e),
         }
