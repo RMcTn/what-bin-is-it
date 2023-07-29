@@ -1,5 +1,5 @@
 #![allow(clippy::needless_return)]
-mod crawler;
+mod scraper;
 
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_sesv2::types::{Body, Content, Destination, EmailContent, Message};
@@ -26,7 +26,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let config = aws_config::from_env().region(region_provider).load().await;
     let aws_client = Client::new(&config);
 
-    let bins = crawler::get_stuff().await?;
+    // Need to scrape the page from an actual browser. Tried curl/reqwest requests, but submitting
+    // the post request would redirect back to the first page. Some sort of request token missing
+    // when we do this or something (first step of form submission changes the url).
+    let bins = scraper::get_stuff().await?;
 
     let today = chrono::Utc::now().date_naive();
     let next_collection_date = next_collection_date_from(today);
