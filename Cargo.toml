@@ -6,6 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+aws-config = "0.55.3"
+aws-sdk-sesv2 = "0.28.0"
 chrono = "0.4.26"
-fantoccini = "0.19.3"
+fantoccini = {version = "0.19.3", features = ["rustls-tls"] }
 tokio = { version = "1.29.1", features = ["full"] }

@@ -1,12 +1,19 @@
 #![allow(clippy::needless_return)]
 mod crawler;
 
+use aws_config::meta::region::RegionProviderChain;
+use aws_sdk_sesv2::types::{Body, Content, Destination, EmailContent, Message};
+use aws_sdk_sesv2::Client;
 use chrono::{Datelike, NaiveDate};
 use std::dbg;
 use std::error::Error;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    let region_provider = RegionProviderChain::default_provider().or_else("eu-west-1");
+    let config = aws_config::from_env().region(region_provider).load().await;
+    let aws_client = Client::new(&config);
+
     let bins = crawler::get_stuff().await?;
 
     let today = chrono::Utc::now().date_naive();
@@ -37,11 +44,68 @@ async fn main() -> Result<(), Box<dyn Error>> {
     };
 
     println!("Next bins:");
-    for bins in next_bin_collection.bins {
-        println!("{} bin is being collected on {}", bins.bin, bins.date);
+    let mut bin_email_body = String::new();
+
+    let subject = bins_subject(&next_bin_collection);
+
+    for bin_day in next_bin_collection.bins {
+        let s = format!(
+            "{} bin is being collected on {}\n",
+            bin_day.bin, bin_day.date
+        );
+        bin_email_body.push_str(&s);
     }
 
+    let to_address = "example@example.com";
+    let destination_email = Destination::builder().to_addresses(to_address).build();
+
+    let subject_content = Content::builder().data(subject).charset("UTF-8").build();
+
+    let body_content = Content::builder()
+        .data(bin_email_body)
+        .charset("UTF-8")
+        .build();
+
+    let body = Body::builder().text(body_content).build();
+
+    let msg = Message::builder()
+        .subject(subject_content)
+        .body(body)
+        .build();
+
+    dbg!(&msg);
+
+    let email_content = EmailContent::builder().simple(msg).build();
+
+    let from_address = "example@example.com";
+    println!("About to send email");
+    aws_client
+        .send_email()
+        .from_email_address(from_address)
+        .destination(destination_email)
+        .content(email_content)
+        .send()
+        .await?;
+    println!("Email sent");
     return Ok(());
+}
+
+fn bins_subject(next_bin_collection: &NextBinCollection) -> String {
+    let mut subject = if next_bin_collection.bins.len() == 1 {
+        format!("{} bin", next_bin_collection.bins[0].bin)
+    } else {
+        let mut string = String::new();
+        for (i, bin_day) in next_bin_collection.bins.iter().enumerate() {
+            if i < next_bin_collection.bins.len() - 1 {
+                string.push_str(&format!("{}, ", bin_day.bin));
+            } else {
+                string.push_str(&format!("{} bins", bin_day.bin));
+            }
+        }
+        string
+    };
+    subject.push_str(" out tonight");
+    return subject;
 }
 
 #[derive(Debug)]
@@ -178,5 +242,30 @@ mod tests {
 
             assert_eq!(next_collection_date, expected_collection_date);
         }
+    }
+
+    #[test]
+    fn bins_subject_handles_multiple_and_single_bins() {
+        let date = "2023-07-31";
+        let date = chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").unwrap();
+        let blue_bin = NextBinCollectionDay {
+            bin: Bin::Blue,
+            date,
+        };
+        let brown_bin = NextBinCollectionDay {
+            bin: Bin::Brown,
+            date,
+        };
+
+        let mut next_bin_collection = NextBinCollection {
+            bins: vec![blue_bin, brown_bin],
+        };
+        let subject = bins_subject(&next_bin_collection);
+        assert_eq!(subject, "Blue, Brown bins out tonight");
+
+        next_bin_collection.bins.pop();
+
+        let subject = bins_subject(&next_bin_collection);
+        assert_eq!(subject, "Blue bin out tonight");
     }
 }
