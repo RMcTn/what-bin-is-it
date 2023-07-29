@@ -10,14 +10,21 @@ use std::{dbg, env};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let region_provider = RegionProviderChain::default_provider().or_else("eu-west-1");
-    let config = aws_config::from_env().region(region_provider).load().await;
-    let aws_client = Client::new(&config);
+    dotenv::dotenv().ok();
 
     let to_email_address =
         env::var("TO_EMAIL_ADDRESS").expect("TO_EMAIL_ADDRESS must be specified");
     let from_email_address =
         env::var("FROM_EMAIL_ADDRESS").expect("FROM_EMAIL_ADDRESS must be specified");
+
+    let _aws_access_key_id =
+        env::var("AWS_ACCESS_KEY_ID").expect("AWS_ACCESS_KEY_ID must be specified");
+    let _aws_secret_access_key =
+        env::var("AWS_SECRET_ACCESS_KEY").expect("AWS_SECRET_ACCESS_KEY must be specified");
+
+    let region_provider = RegionProviderChain::default_provider().or_else("eu-west-1");
+    let config = aws_config::from_env().region(region_provider).load().await;
+    let aws_client = Client::new(&config);
 
     let bins = crawler::get_stuff().await?;
 
