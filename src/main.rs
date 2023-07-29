@@ -5,14 +5,19 @@ use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_sesv2::types::{Body, Content, Destination, EmailContent, Message};
 use aws_sdk_sesv2::Client;
 use chrono::{Datelike, NaiveDate};
-use std::dbg;
 use std::error::Error;
+use std::{dbg, env};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let region_provider = RegionProviderChain::default_provider().or_else("eu-west-1");
     let config = aws_config::from_env().region(region_provider).load().await;
     let aws_client = Client::new(&config);
+
+    let to_email_address =
+        env::var("TO_EMAIL_ADDRESS").expect("TO_EMAIL_ADDRESS must be specified");
+    let from_email_address =
+        env::var("FROM_EMAIL_ADDRESS").expect("FROM_EMAIL_ADDRESS must be specified");
 
     let bins = crawler::get_stuff().await?;
 
@@ -56,8 +61,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         bin_email_body.push_str(&s);
     }
 
-    let to_address = "example@example.com";
-    let destination_email = Destination::builder().to_addresses(to_address).build();
+    let destination_email = Destination::builder()
+        .to_addresses(to_email_address)
+        .build();
 
     let subject_content = Content::builder().data(subject).charset("UTF-8").build();
 
@@ -77,11 +83,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let email_content = EmailContent::builder().simple(msg).build();
 
-    let from_address = "example@example.com";
     println!("About to send email");
     aws_client
         .send_email()
-        .from_email_address(from_address)
+        .from_email_address(from_email_address)
         .destination(destination_email)
         .content(email_content)
         .send()
