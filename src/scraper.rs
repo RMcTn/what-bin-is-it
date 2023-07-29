@@ -2,12 +2,18 @@ use std::error::Error;
 
 use chrono::NaiveDate;
 use fantoccini::elements::Element;
+use fantoccini::wd::Capabilities;
 use fantoccini::{Client, ClientBuilder, Locator};
 
 use crate::{Bin, BinDates};
 
 pub async fn get_stuff() -> Result<Vec<BinDates>, Box<dyn Error>> {
+    let mut capabilities = Capabilities::new();
+    let options = serde_json::json!({ "args": ["--headless"] });
+    capabilities.insert("moz:firefoxOptions".to_string(), options);
+
     let client = ClientBuilder::native()
+        .capabilities(capabilities)
         .connect("http://localhost:4444")
         .await?;
 

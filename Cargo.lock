@@ -1839,6 +1839,7 @@ dependencies = [
  "chrono",
  "dotenv",
  "fantoccini",
+ "serde_json",
  "tokio",
 ]
 
