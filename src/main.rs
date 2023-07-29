@@ -1,3 +1,4 @@
+#![allow(clippy::needless_return)]
 use chrono::{Datelike, NaiveDate};
 use fantoccini::elements::Element;
 use fantoccini::{Client, ClientBuilder, Locator};
@@ -92,7 +93,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         bins: closest_bin_days,
     };
 
-    dbg!(next_bin_collection);
+    println!("Next bins:");
+    for bins in next_bin_collection.bins {
+        println!("{} bin is being collected on {}", bins.bin, bins.date);
+    }
 
     return Ok(());
 }
@@ -256,6 +260,19 @@ enum Bin {
     Blue,
     Brown,
     Green,
+}
+
+impl std::fmt::Display for Bin {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let to_print = match self {
+            Bin::Black => "Black",
+            Bin::Blue => "Blue",
+            Bin::Brown => "Brown",
+            Bin::Green => "Green",
+        };
+
+        return f.write_str(to_print);
+    }
 }
 
 #[derive(Debug)]
