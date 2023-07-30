@@ -7,7 +7,7 @@ use fantoccini::{Client, ClientBuilder, Locator};
 
 use crate::{Bin, BinDates};
 
-pub async fn get_stuff() -> Result<Vec<BinDates>, Box<dyn Error>> {
+pub async fn get_stuff(postcode: &str, address: &str) -> Result<Vec<BinDates>, Box<dyn Error>> {
     let mut capabilities = Capabilities::new();
     let options = serde_json::json!({ "args": ["--headless"] });
     capabilities.insert("moz:firefoxOptions".to_string(), options);
@@ -18,7 +18,7 @@ pub async fn get_stuff() -> Result<Vec<BinDates>, Box<dyn Error>> {
         .await?;
 
     // NOTE: Some of the fields get different IDs when submitting each step it seems
-    fill_out_address_form(&client).await?;
+    fill_out_address_form(&client, postcode, address).await?;
 
     let black_bins_div = client
         .find(Locator::Css(".waste-type--general-waste"))
@@ -73,11 +73,14 @@ pub async fn get_stuff() -> Result<Vec<BinDates>, Box<dyn Error>> {
     return Ok(bins);
 }
 
-async fn fill_out_address_form(client: &Client) -> Result<(), Box<dyn Error>> {
+async fn fill_out_address_form(
+    client: &Client,
+    postcode: &str,
+    address: &str,
+) -> Result<(), Box<dyn Error>> {
     let bins_url = "https://www.northlanarkshire.gov.uk/bin-collection-dates";
 
     let postcode_input_id = "address-finder-postcode-search-text";
-    let postcode = "***REMOVED***";
 
     let find_address_input_id = "address_finder-postcode-search-button";
 
@@ -122,7 +125,7 @@ async fn fill_out_address_form(client: &Client) -> Result<(), Box<dyn Error>> {
     address_drop_down.click().await?;
     dbg!("Clicked address drop down");
 
-    address_drop_down.send_keys("***REMOVED***").await?;
+    address_drop_down.send_keys(address).await?;
     // TODO: Is Enter needed here?
     dbg!("Waiting for confirm address button");
     client
