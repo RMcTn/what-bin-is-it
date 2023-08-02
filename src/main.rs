@@ -10,6 +10,16 @@ use std::{dbg, env};
 
 use rusqlite::Result;
 
+// TODO:  Some gotchas that need solved:
+//  TODO: Not all house addresses are the same as what the site provides.
+//      I.e someone could be in a named house but that still comes up at 5 Madeup Lane.
+//      Could ask user to input the address they would put in the site
+//  TODO: Not all houses have all bin access. I.e, some houses only have the general waste bin collection
+//  TODO: Not all bin collection dates will be the same day. I.e, not all bin collections are on a
+//      Monday. Need the user to specify their collection date (or scrape it from the site again)
+//  TODO: Are bin collections the same for an entire postcode? Could be an opportunity for
+//      caching per postcode, but need to verify that assumption
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     dotenv::dotenv().ok();
