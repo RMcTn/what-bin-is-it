@@ -4,12 +4,21 @@ mod scraper;
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_sesv2::types::{Body, Content, Destination, EmailContent, Message};
 use aws_sdk_sesv2::Client;
+use axum::extract::State;
+use axum::response::Html;
+use axum::routing::get;
+use axum::Form;
+use axum::Router;
+use axum_macros::debug_handler;
 use chrono::{Datelike, NaiveDate};
+use serde::Deserialize;
+use sqlx::sqlite::SqlitePoolOptions;
+use sqlx::SqlitePool;
 use std::error::Error;
+use std::net::SocketAddr;
 use std::{dbg, env};
 
-use rusqlite::Result;
-
+// TODO would be nice to have an admin page that for adding new users
 // TODO:  Some gotchas that need solved:
 //  TODO: Not all house addresses are the same as what the site provides.
 //      I.e someone could be in a named house but that still comes up at 5 Madeup Lane.
@@ -32,43 +41,54 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let _aws_secret_access_key =
         env::var("AWS_SECRET_ACCESS_KEY").expect("AWS_SECRET_ACCESS_KEY must be specified");
 
-    let db_filename = env::var("DB_FILENAME").expect("DB_FILENAME must be specified");
+    let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be specified");
 
     let region_provider = RegionProviderChain::default_provider().or_else("eu-west-1");
     let config = aws_config::from_env().region(region_provider).load().await;
     let aws_client = Client::new(&config);
 
-    let db_conn = rusqlite::Connection::open(db_filename)?;
-    db_conn.execute(
+    let pool = SqlitePoolOptions::new()
+        .max_connections(5)
+        .connect(&db_url)
+        .await?;
+
+    sqlx::query(
         "CREATE TABLE IF NOT EXISTS emails (
             id          INTEGER PRIMARY KEY,
             email       TEXT NOT NULL,
             postcode    TEXT NOT NULL,
             address     TEXT NOT NULL
         )",
-        (),
-    )?;
+    )
+    .execute(&pool)
+    .await?;
 
-    db_conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS EmailsUniqueIndexOnEmails ON emails (email)",
-        (),
-    )?;
+    sqlx::query("CREATE UNIQUE INDEX IF NOT EXISTS EmailsUniqueIndexOnEmails ON emails (email)")
+        .execute(&pool)
+        .await?;
 
-    let mut stmt = db_conn.prepare("SELECT id, email, postcode, address FROM emails")?;
-    let people_to_notify = stmt.query_map([], |row| {
-        Ok(ToBeNotified {
-            _id: row.get(0)?,
-            email: row.get(1)?,
-            postcode: row.get(2)?,
-            address: row.get(3)?,
-        })
-    })?;
+    let records = sqlx::query!("SELECT id, email, postcode, address FROM emails")
+        .fetch_all(&pool)
+        .await?;
+    let mut people_to_notify = vec![];
+    for record in records {
+        let user = User {
+            _id: record.id,
+            email: record.email,
+            postcode: record.postcode,
+            address: record.address,
+        };
+        people_to_notify.push(user);
+    }
+    for person in &people_to_notify {
+        println!("Found {:?}", person);
+    }
 
     // Need to scrape the page from an actual browser. Tried curl/reqwest requests, but submitting
     // the post request would redirect back to the first page. Some sort of request token missing
     // when we do this or something (first step of form submission changes the url).
+
     for person in people_to_notify {
-        let person = person.unwrap();
         println!("Found {:?}", person);
         let bins = scraper::get_stuff(&person.postcode, &person.address).await?;
 
@@ -100,50 +120,28 @@ async fn main() -> Result<(), Box<dyn Error>> {
         };
 
         println!("Next bins:");
-        let mut bin_email_body = String::new();
 
-        let subject = bins_subject(&next_bin_collection);
-
-        for bin_day in next_bin_collection.bins {
-            let s = format!(
-                "{} bin is being collected on {}\n",
-                bin_day.bin, bin_day.date
-            );
-            bin_email_body.push_str(&s);
-        }
-
-        let destination_email = Destination::builder().to_addresses(&person.email).build();
-
-        let subject_content = Content::builder().data(subject).charset("UTF-8").build();
-
-        let body_content = Content::builder()
-            .data(bin_email_body)
-            .charset("UTF-8")
-            .build();
-
-        let body = Body::builder().text(body_content).build();
-
-        let msg = Message::builder()
-            .subject(subject_content)
-            .body(body)
-            .build();
-
-        dbg!(&msg);
-
-        let email_content = EmailContent::builder().simple(msg).build();
-
-        println!("About to send email to {}", &person.email);
-        aws_client
-            .send_email()
-            .from_email_address(&from_email_address)
-            .destination(destination_email)
-            .content(email_content)
-            .send()
-            .await?;
+        let email = build_email_to_send(
+            &next_bin_collection,
+            &person,
+            &aws_client,
+            &from_email_address,
+        );
+        email.send().await?;
         println!("Email sent");
     }
 
     return Ok(());
+
+    let app = Router::new()
+        .route("/", get(show_create_user_form).post(submit_user_form))
+        .with_state(pool);
+
+    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    axum::Server::bind(&addr)
+        .serve(app.into_make_service())
+        .await
+        .unwrap();
 }
 
 fn bins_subject(next_bin_collection: &NextBinCollection) -> String {
@@ -327,10 +325,121 @@ mod tests {
 }
 
 #[derive(Debug)]
-struct ToBeNotified {
-    _id: i32,
+struct User {
+    _id: i64,
     // TODO: Better types for these with some validation?
     email: String,
     postcode: String,
     address: String,
+}
+
+#[debug_handler]
+async fn submit_user_form(State(pool): State<SqlitePool>, Form(input): Form<CreateUser>) -> String {
+    dbg!(&input);
+    let user = create_user(&pool, input).await.unwrap();
+    dbg!(&user);
+    return "Wow".to_string();
+}
+
+async fn create_user(pool: &SqlitePool, input: CreateUser) -> Result<User, Box<dyn Error>> {
+    let id = sqlx::query!(
+        "INSERT INTO emails (email, postcode, address) VALUES (?1, ?2, ?3)",
+        input.email,
+        input.postcode,
+        input.address
+    )
+    .execute(pool)
+    .await?
+    .last_insert_rowid();
+
+    return Ok(User {
+        _id: id,
+        email: input.email,
+        postcode: input.postcode,
+        address: input.address,
+    });
+}
+
+async fn show_create_user_form() -> Html<&'static str> {
+    Html(
+        r#"
+        <!doctype html>
+        <html>
+            <head></head>
+            <body>
+                
+                    <form action="/" method="post" style="display:flex; flex-direction:column; flex-wrap: wrap">
+                        <label for="email">
+                            Enter the email:
+                            <input type="text" name="email">
+                        </label>
+
+                        <label for="postcode">
+                            Enter the postcode:
+                            <input type="text" name="postcode">
+                        </label>
+
+                        <label for="address">
+                            Enter the address:
+                            <input type="text" name="address">
+                        </label>
+
+                        <input type="submit" value="Create user">
+                    </form>
+                </div>
+            </body>
+        </html>
+        "#,
+    )
+}
+
+#[derive(Deserialize, Debug)]
+struct CreateUser {
+    email: String,
+    postcode: String,
+    address: String,
+}
+
+fn build_email_to_send(
+    next_bin_collection: &NextBinCollection,
+    person: &User,
+    aws_client: &aws_sdk_sesv2::Client,
+    from_email_address: &str,
+) -> aws_sdk_sesv2::operation::send_email::builders::SendEmailFluentBuilder {
+    let mut bin_email_body = String::new();
+
+    let subject = bins_subject(&next_bin_collection);
+
+    for bin_day in &next_bin_collection.bins {
+        let s = format!(
+            "{} bin is being collected on {}\n",
+            bin_day.bin, bin_day.date
+        );
+        bin_email_body.push_str(&s);
+    }
+
+    let destination_email = Destination::builder().to_addresses(&person.email).build();
+
+    let subject_content = Content::builder().data(subject).charset("UTF-8").build();
+
+    let body_content = Content::builder()
+        .data(bin_email_body)
+        .charset("UTF-8")
+        .build();
+
+    let body = Body::builder().text(body_content).build();
+
+    let msg = Message::builder()
+        .subject(subject_content)
+        .body(body)
+        .build();
+
+    dbg!(&msg);
+
+    let email_content = EmailContent::builder().simple(msg).build();
+    aws_client
+        .send_email()
+        .from_email_address(from_email_address)
+        .destination(destination_email)
+        .content(email_content)
 }
