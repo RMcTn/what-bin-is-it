@@ -1,0 +1,18 @@
+[package]
+name = "email_sender"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+aws-config = "0.55.3"
+aws-sdk-sesv2 = "0.28.0"
+dotenv = "0.15.0"
+chrono = "0.4.26"
+tokio = { version = "1.29.1", features = ["full"] }
+sqlx = { version = "0.7.1", features = ["sqlite", "runtime-tokio"] }
+serde = { version = "1.0.183", features = ["serde_derive"] }
+
+scraper = { path = "../scraper" }
+bin_stuff = { path = "../bin_stuff" }

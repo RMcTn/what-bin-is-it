@@ -5,7 +5,7 @@ use fantoccini::elements::Element;
 use fantoccini::wd::Capabilities;
 use fantoccini::{Client, ClientBuilder, Locator};
 
-use crate::{Bin, BinDates};
+use bin_stuff::{Bin, BinDates};
 
 pub async fn get_stuff(postcode: &str, address: &str) -> Result<Vec<BinDates>, Box<dyn Error>> {
     let mut capabilities = Capabilities::new();
