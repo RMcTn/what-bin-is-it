@@ -1932,6 +1932,7 @@ dependencies = [
  "aws-sdk-sesv2",
  "axum",
  "axum-macros",
+ "bin_stuff",
  "chrono",
  "dotenv",
  "fantoccini",

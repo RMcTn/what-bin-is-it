@@ -13,6 +13,8 @@ use std::error::Error;
 use std::net::SocketAddr;
 use std::{dbg, env};
 
+use bin_stuff::User;
+
 // TODO would be nice to have an admin page that for adding new users
 // TODO:  Some gotchas that need solved:
 //  TODO: Not all house addresses are the same as what the site provides.
@@ -75,15 +77,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .unwrap();
 
     return Ok(());
-}
-
-#[derive(Debug)]
-pub struct User {
-    _id: i64,
-    // TODO: Better types for these with some validation?
-    pub email: String,
-    pub postcode: String,
-    pub address: String,
 }
 
 #[debug_handler]
