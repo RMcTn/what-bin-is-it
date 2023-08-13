@@ -17,7 +17,7 @@ See https://docs.aws.amazon.com/ses/latest/dg/setting-up.html for AWS related cr
 AWS_ACCESS_KEY_ID  
 AWS_SECRET_ACCESS_KEY  
 FROM_EMAIL_ADDRESS  
-DB_FILENAME
+DATABASE_URL
 
 ## Cross compile
 ```cargo install cross --git https://github.com/cross-rs/cross```
