@@ -18,5 +18,7 @@ jobs:
     - uses: actions/checkout@v3
     - name: Build
       run: cargo build --verbose
+      env:
+        DATABASE_URL: "sqlite://:memory:"
     - name: Run tests
       run: cargo test --verbose
