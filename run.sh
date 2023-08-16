@@ -5,4 +5,4 @@ pkill geckodriver
 mkdir $HOME/geckodriver-profiles
 geckodriver --profile-root $HOME/geckodriver-profiles &
 
-cargo run
+cargo run --bin email_sender
