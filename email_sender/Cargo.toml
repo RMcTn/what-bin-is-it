@@ -16,3 +16,5 @@ serde = { version = "1.0.183", features = ["serde_derive"] }
 
 scraper = { path = "../scraper" }
 bin_stuff = { path = "../bin_stuff" }
+log = "0.4.20"
+env_logger = "0.10.0"

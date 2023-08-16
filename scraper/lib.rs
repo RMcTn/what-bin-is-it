@@ -6,6 +6,7 @@ use fantoccini::wd::Capabilities;
 use fantoccini::{Client, ClientBuilder, Locator};
 
 use bin_stuff::{Bin, BinDates};
+use log::info;
 
 pub async fn get_stuff(postcode: &str, address: &str) -> Result<Vec<BinDates>, Box<dyn Error>> {
     let mut capabilities = Capabilities::new();
@@ -88,69 +89,70 @@ async fn fill_out_address_form(
 
     let next_button_name = "op";
 
+    info!("Going to site");
     client.goto(bins_url).await?;
 
-    dbg!("Waiting for cookie confirmation");
+    info!("Waiting for cookie confirmation");
     client
         .find(Locator::Css(".cb-enable"))
         .await?
         .click()
         .await?;
-    dbg!("Clicked cookie");
+    info!("Clicked cookie");
 
-    dbg!("Little sleep for page load");
+    info!("Little sleep for page load");
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-    dbg!("Waiting for postcode input box");
+    info!("Waiting for postcode input box");
     let postcode_input = client.find(Locator::Id(postcode_input_id)).await?;
 
     postcode_input.click().await?;
-    dbg!("Clicked postcode input box");
+    info!("Clicked postcode input box");
     // Enter key doesn't submit this form
     postcode_input.send_keys(postcode).await?;
     // TODO - Check the input box to make sure a value is selected (or rely on the confirm part
     // after?)
 
-    dbg!("Waiting for find address button");
+    info!("Waiting for find address button");
     client
         .find(Locator::Id(find_address_input_id))
         .await?
         .click()
         .await?;
-    dbg!("Submitted find address button");
-    dbg!("Little sleep for page load");
+    info!("Submitted find address button");
+    info!("Little sleep for page load");
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
-    dbg!("Waiting for address drop down");
+    info!("Waiting for address drop down");
     let address_drop_down = client.find(Locator::Css("select.form-select")).await?;
     address_drop_down.click().await?;
-    dbg!("Clicked address drop down");
+    info!("Clicked address drop down");
 
     address_drop_down.send_keys(address).await?;
     // TODO: Is Enter needed here?
-    dbg!("Waiting for confirm address button");
+    info!("Waiting for confirm address button");
     client
         .find(Locator::Id(confirm_button_id))
         .await?
         .click()
         .await?;
-    dbg!("Clicked confirm address button");
+    info!("Clicked confirm address button");
     // Ignoring successful address lookup check
 
-    dbg!("Waiting for next button");
+    info!("Waiting for next button");
     client
         .find(Locator::Css(&format!("input[name={}]", next_button_name)))
         .await?
         .click()
         .await?;
-    dbg!("Clicked next button");
+    info!("Clicked next button");
 
-    dbg!("Waiting for next page");
+    info!("Waiting for next page");
     client
         .wait()
         .for_element(Locator::Css(".bin-collection-dates-container"))
         .await?;
 
-    dbg!("On next page");
+    info!("On next page");
     return Ok(());
 }
 
