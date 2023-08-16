@@ -5,6 +5,7 @@ use aws_sdk_sesv2::{
     types::{Body, Content, Destination, EmailContent, Message},
     Client,
 };
+use log::{error, info};
 use sqlx::sqlite::SqlitePoolOptions;
 
 use bin_stuff::{next_collection_date_for_bin, next_collection_date_from, NextBinCollection, User};
@@ -13,6 +14,9 @@ use bin_stuff::{next_collection_date_for_bin, next_collection_date_from, NextBin
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     dotenv::dotenv().ok();
+    let env = env_logger::Env::default().default_filter_or("info");
+    env_logger::init_from_env(env);
+
     let from_email_address =
         env::var("FROM_EMAIL_ADDRESS").expect("FROM_EMAIL_ADDRESS must be specified");
 
@@ -48,7 +52,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // the post request would redirect back to the first page. Some sort of request token missing
     // when we do this or something (first step of form submission changes the url).
 
-    for person in people_to_notify {
+    info!("{} people to be notified", people_to_notify.len());
+
+    if let Err(e) = do_the_stuff(&people_to_notify, &aws_client, &from_email_address).await {
+        error!("{}", e);
+        return Err(e);
+    }
+
+    return Ok(());
+}
+
+async fn do_the_stuff(
+    users: &[User],
+    aws_client: &aws_sdk_sesv2::Client,
+    from_email_address: &str,
+) -> Result<(), Box<dyn Error>> {
+    for person in users {
         println!("Found {:?}", person);
         let bins = scraper::get_stuff(&person.postcode, &person.address).await?;
 
@@ -90,7 +109,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         email.send().await?;
         println!("Email sent");
     }
-
     return Ok(());
 }
 

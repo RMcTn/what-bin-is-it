@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::panic;
 
 use chrono::NaiveDate;
 use fantoccini::elements::Element;
@@ -6,20 +7,44 @@ use fantoccini::wd::Capabilities;
 use fantoccini::{Client, ClientBuilder, Locator};
 
 use bin_stuff::{Bin, BinDates};
-use log::info;
+use log::{error, info};
 
 pub async fn get_stuff(postcode: &str, address: &str) -> Result<Vec<BinDates>, Box<dyn Error>> {
     let mut capabilities = Capabilities::new();
     let options = serde_json::json!({ "args": ["--headless"] });
     capabilities.insert("moz:firefoxOptions".to_string(), options);
 
-    let client = ClientBuilder::native()
+    let client = match ClientBuilder::native()
         .capabilities(capabilities)
         .connect("http://localhost:4444")
-        .await?;
+        .await
+    {
+        Ok(client) => client,
+        Err(e) => {
+            error!("{}", e);
+            return Err(Box::new(e));
+        }
+    };
 
     // NOTE: Some of the fields get different IDs when submitting each step it seems
-    fill_out_address_form(&client, postcode, address).await?;
+    let max_attempts = 3;
+    let mut attempts = 0;
+    while attempts < max_attempts {
+        info!("Visiting bin page");
+        info!("Attempt {}/{}", attempts, max_attempts);
+        match fill_out_address_form(&client, postcode, address).await {
+            Ok(_) => break,
+            Err(e) => {
+                attempts += 1;
+                error!("{}", e);
+
+                if attempts == max_attempts {
+                    error!("Reached max attempt limit");
+                    return Err(e);
+                }
+            }
+        }
+    }
 
     let black_bins_div = client
         .find(Locator::Css(".waste-type--general-waste"))
