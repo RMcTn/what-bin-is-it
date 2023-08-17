@@ -1,5 +1,4 @@
 use std::error::Error;
-use std::panic;
 
 use chrono::NaiveDate;
 use fantoccini::elements::Element;

@@ -69,6 +69,8 @@ async fn do_the_stuff(
 ) -> Result<(), Box<dyn Error>> {
     for person in users {
         println!("Found {:?}", person);
+        // It's likely if the scraper fails for one person after all attempts, it will fail for all
+        // Can pull this out if we want to continue for other people after a scraping error
         let bins = scraper::get_stuff(&person.postcode, &person.address).await?;
 
         let today = chrono::Utc::now().date_naive();
