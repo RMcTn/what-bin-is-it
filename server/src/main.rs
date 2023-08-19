@@ -8,6 +8,8 @@ use axum::Router;
 use axum_macros::debug_handler;
 use serde::Deserialize;
 use sqlx::sqlite::SqlitePoolOptions;
+use sqlx::sqlite::SqliteRow;
+use sqlx::Row;
 use sqlx::SqlitePool;
 use std::error::Error;
 use std::net::SocketAddr;
@@ -36,25 +38,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     sqlx::migrate!("../migrations").run(&pool).await?;
 
-    let records = sqlx::query!("SELECT id, email, postcode, address FROM emails")
-        .fetch_all(&pool)
-        .await?;
-    let mut people_to_notify = vec![];
-    for record in records {
-        let user = User {
-            _id: record.id,
-            email: record.email,
-            postcode: record.postcode,
-            address: record.address,
-        };
-        people_to_notify.push(user);
-    }
+    let people_to_notify = get_all_users(&pool).await?;
     for person in &people_to_notify {
         println!("Found {:?}", person);
     }
 
     let app = Router::new()
         .route("/", get(show_create_user_form).post(submit_user_form))
+        .route("/users", get(show_all_users_page))
         .with_state(pool);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
@@ -71,19 +62,18 @@ async fn submit_user_form(State(pool): State<SqlitePool>, Form(input): Form<Crea
     dbg!(&input);
     let user = create_user(&pool, input).await.unwrap();
     dbg!(&user);
+    // TODO: Redirect to users page
     return "Wow".to_string();
 }
 
 async fn create_user(pool: &SqlitePool, input: CreateUser) -> Result<User, Box<dyn Error>> {
-    let id = sqlx::query!(
-        "INSERT INTO emails (email, postcode, address) VALUES (?1, ?2, ?3)",
-        input.email,
-        input.postcode,
-        input.address
-    )
-    .execute(pool)
-    .await?
-    .last_insert_rowid();
+    let id = sqlx::query("INSERT INTO emails (email, postcode, address) VALUES (?1, ?2, ?3)")
+        .bind(&input.email)
+        .bind(&input.postcode)
+        .bind(&input.address)
+        .execute(pool)
+        .await?
+        .last_insert_rowid();
 
     return Ok(User {
         _id: id,
@@ -91,6 +81,25 @@ async fn create_user(pool: &SqlitePool, input: CreateUser) -> Result<User, Box<d
         postcode: input.postcode,
         address: input.address,
     });
+}
+
+async fn get_all_users(pool: &SqlitePool) -> Result<Vec<User>, Box<dyn Error>> {
+    // TODO: Paging at some point
+    let users = sqlx::query("SELECT id, email, postcode, address FROM emails")
+        .map(|row: SqliteRow| User {
+            _id: row.get("id"),
+            email: row.get("email"),
+            postcode: row.get("postcode"),
+            address: row.get("address"),
+        })
+        .fetch_all(pool)
+        .await?;
+
+    return Ok(users);
+}
+
+async fn show_all_users_page() -> Html<&'static str> {
+    Html("Nothing yet")
 }
 
 async fn show_create_user_form() -> Html<&'static str> {
