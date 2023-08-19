@@ -34,20 +34,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .connect(&db_url)
         .await?;
 
-    sqlx::query(
-        "CREATE TABLE IF NOT EXISTS emails (
-            id          INTEGER PRIMARY KEY,
-            email       TEXT NOT NULL,
-            postcode    TEXT NOT NULL,
-            address     TEXT NOT NULL
-        )",
-    )
-    .execute(&pool)
-    .await?;
-
-    sqlx::query("CREATE UNIQUE INDEX IF NOT EXISTS EmailsUniqueIndexOnEmails ON emails (email)")
-        .execute(&pool)
-        .await?;
+    sqlx::migrate!("../migrations").run(&pool).await?;
 
     let records = sqlx::query!("SELECT id, email, postcode, address FROM emails")
         .fetch_all(&pool)
@@ -113,7 +100,7 @@ async fn show_create_user_form() -> Html<&'static str> {
         <html>
             <head></head>
             <body>
-                
+
                     <form action="/" method="post" style="display:flex; flex-direction:column; flex-wrap: wrap">
                         <label for="email">
                             Enter the email:

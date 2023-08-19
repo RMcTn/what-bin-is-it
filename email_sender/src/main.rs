@@ -34,6 +34,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .connect(&db_url)
         .await?;
 
+    sqlx::migrate!("../migrations").run(&pool).await?;
+
     let records = sqlx::query!("SELECT id, email, postcode, address FROM emails")
         .fetch_all(&pool)
         .await?;
