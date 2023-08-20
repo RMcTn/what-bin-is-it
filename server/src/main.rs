@@ -28,6 +28,9 @@ use bin_stuff::User;
 
 use crate::email_sender::do_the_stuff;
 
+// TODO: Store DB in docker volume or something
+// TODO: Auth for pages (Or just remove it for now?)
+
 // TODO:  Some gotchas that need solved:
 //  TODO: Not all house addresses are the same as what the site provides.
 //      I.e someone could be in a named house but that still comes up at 5 Madeup Lane.
@@ -80,8 +83,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let scheduler_app_state = app_state.clone();
 
     let app = Router::new()
-        .route("/", get(show_create_user_form).post(submit_user_form))
-        .route("/users", get(show_all_users_page))
+        .route("/", get(root_page))
+        // .route("/create_user", get(show_create_user_form).post(submit_user_form))
+        // .route("/users", get(show_all_users_page))
         .with_state(app_state);
 
     let mut scheduler = AsyncScheduler::new();
@@ -170,6 +174,10 @@ async fn get_all_users(pool: &SqlitePool) -> Result<Vec<User>, Box<dyn Error>> {
 }
 
 async fn show_all_users_page() -> Html<&'static str> {
+    Html("Nothing yet")
+}
+
+async fn root_page() -> Html<&'static str> {
     Html("Nothing yet")
 }
 
