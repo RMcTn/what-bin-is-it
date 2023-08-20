@@ -4,7 +4,7 @@
 # edition = "2021"
 
 [workspace]
-members = ["server", "email_sender", "scraper", "bin_stuff"]
+members = ["server", "scraper", "bin_stuff"]
 
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

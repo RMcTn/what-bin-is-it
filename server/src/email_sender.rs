@@ -1,87 +1,23 @@
-use std::{env, error::Error};
+use std::error::Error;
 
-use aws_config::meta::region::RegionProviderChain;
-use aws_sdk_sesv2::{
-    types::{Body, Content, Destination, EmailContent, Message},
-    Client,
-};
-use log::{error, info};
-use sqlx::Row;
-use sqlx::{
-    sqlite::{SqlitePoolOptions, SqliteRow},
-    SqlitePool,
-};
+use aws_sdk_sesv2::types::{Body, Content, Destination, EmailContent, Message};
 
 use bin_stuff::{next_collection_date_for_bin, next_collection_date_from, NextBinCollection, User};
 
-/// Binary to send emails for next bin collection
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    dotenv::dotenv().ok();
-    let env = env_logger::Env::default().default_filter_or("info");
-    env_logger::init_from_env(env);
-
-    let from_email_address =
-        env::var("FROM_EMAIL_ADDRESS").expect("FROM_EMAIL_ADDRESS must be specified");
-
-    let _aws_access_key_id =
-        env::var("AWS_ACCESS_KEY_ID").expect("AWS_ACCESS_KEY_ID must be specified");
-    let _aws_secret_access_key =
-        env::var("AWS_SECRET_ACCESS_KEY").expect("AWS_SECRET_ACCESS_KEY must be specified");
-    let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be specified");
-    let region_provider = RegionProviderChain::default_provider().or_else("eu-west-1");
-    let config = aws_config::from_env().region(region_provider).load().await;
-    let aws_client = Client::new(&config);
-
-    let pool = SqlitePoolOptions::new()
-        .max_connections(5)
-        .connect(&db_url)
-        .await?;
-
-    sqlx::migrate!("../migrations").run(&pool).await?;
-    let people_to_notify = get_all_users(&pool).await?;
-
-    // Need to scrape the page from an actual browser. Tried curl/reqwest requests, but submitting
-    // the post request would redirect back to the first page. Some sort of request token missing
-    // when we do this or something (first step of form submission changes the url).
-
-    info!("{} people to be notified", people_to_notify.len());
-
-    if let Err(e) = do_the_stuff(&people_to_notify, &aws_client, &from_email_address).await {
-        error!("{}", e);
-        return Err(e);
-    }
-
-    return Ok(());
-}
-
-async fn get_all_users(pool: &SqlitePool) -> Result<Vec<User>, Box<dyn Error>> {
-    // TODO: We've got this in two places now. what do we actually want to do with this "shared"
-    // database logic? Should the email sender just be a method called weekly from the main server?
-    // Would make things much easier
-    // TODO: Paging at some point
-    let users = sqlx::query("SELECT id, email, postcode, address FROM emails")
-        .map(|row: SqliteRow| User {
-            _id: row.get("id"),
-            email: row.get("email"),
-            postcode: row.get("postcode"),
-            address: row.get("address"),
-        })
-        .fetch_all(pool)
-        .await?;
-
-    return Ok(users);
-}
-
-async fn do_the_stuff(
+pub async fn do_the_stuff(
     users: &[User],
     aws_client: &aws_sdk_sesv2::Client,
     from_email_address: &str,
 ) -> Result<(), Box<dyn Error>> {
     for person in users {
         println!("Found {:?}", person);
+        // TODO: Split out the scraping from the email sending
+        //
         // It's likely if the scraper fails for one person after all attempts, it will fail for all
         // Can pull this out if we want to continue for other people after a scraping error
+        // Need to scrape the page from an actual browser. Tried curl/reqwest requests, but submitting
+        // the post request would redirect back to the first page. Some sort of request token missing
+        // when we do this or something (first step of form submission changes the url).
         let bins = scraper::get_stuff(&person.postcode, &person.address).await?;
 
         let today = chrono::Utc::now().date_naive();

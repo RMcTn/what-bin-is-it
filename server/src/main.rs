@@ -1,11 +1,16 @@
 #![allow(clippy::needless_return)]
 
+pub mod email_sender;
+
+use aws_config::meta::region::RegionProviderChain;
+use aws_sdk_sesv2::Client;
 use axum::extract::State;
 use axum::response::Html;
 use axum::routing::get;
 use axum::Form;
 use axum::Router;
 use axum_macros::debug_handler;
+use log::error;
 use serde::Deserialize;
 use sqlx::sqlite::SqlitePoolOptions;
 use sqlx::sqlite::SqliteRow;
@@ -17,19 +22,39 @@ use std::{dbg, env};
 
 use bin_stuff::User;
 
-// TODO would be nice to have an admin page that for adding new users
+use crate::email_sender::do_the_stuff;
+
 // TODO:  Some gotchas that need solved:
 //  TODO: Not all house addresses are the same as what the site provides.
 //      I.e someone could be in a named house but that still comes up at 5 Madeup Lane.
 //      Could ask user to input the address they would put in the site
 //  TODO: Not all houses have all bin access. I.e, some houses only have the general waste bin collection
 //  TODO: Not all bin collection dates will be the same day. I.e, not all bin collections are on a Monday. Need the user to specify their collection date (or scrape it from the site again) TODO: Are bin collections the same for an entire postcode? Could be an opportunity for caching per postcode, but need to verify that assumption
+//
+
+#[derive(Clone)]
+struct AppState {
+    pool: SqlitePool,
+    aws_client: Client,
+    from_email_address: String,
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     dotenv::dotenv().ok();
+    let env = env_logger::Env::default().default_filter_or("info");
+    env_logger::init_from_env(env);
 
+    let from_email_address =
+        env::var("FROM_EMAIL_ADDRESS").expect("FROM_EMAIL_ADDRESS must be specified");
+    let _aws_access_key_id =
+        env::var("AWS_ACCESS_KEY_ID").expect("AWS_ACCESS_KEY_ID must be specified");
+    let _aws_secret_access_key =
+        env::var("AWS_SECRET_ACCESS_KEY").expect("AWS_SECRET_ACCESS_KEY must be specified");
     let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be specified");
+    let region_provider = RegionProviderChain::default_provider().or_else("eu-west-1");
+    let config = aws_config::from_env().region(region_provider).load().await;
+    let aws_client = Client::new(&config);
 
     let pool = SqlitePoolOptions::new()
         .max_connections(5)
@@ -43,10 +68,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
         println!("Found {:?}", person);
     }
 
+    let app_state = AppState {
+        pool,
+        aws_client,
+        from_email_address,
+    };
     let app = Router::new()
         .route("/", get(show_create_user_form).post(submit_user_form))
         .route("/users", get(show_all_users_page))
-        .with_state(pool);
+        .route("/send_email", get(emails))
+        .with_state(app_state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     axum::Server::bind(&addr)
@@ -57,8 +88,29 @@ async fn main() -> Result<(), Box<dyn Error>> {
     return Ok(());
 }
 
+async fn emails(State(app_state): State<AppState>) -> String {
+    // TODO: Temp method whilst setting up job scheduling
+    let pool = app_state.pool;
+    let people_to_notify = get_all_users(&pool).await.unwrap();
+    if let Err(e) = do_the_stuff(
+        &people_to_notify,
+        &app_state.aws_client,
+        &app_state.from_email_address,
+    )
+    .await
+    {
+        error!("{}", e);
+        // return Err(e);
+    }
+    return "Wow".to_string();
+}
+
 #[debug_handler]
-async fn submit_user_form(State(pool): State<SqlitePool>, Form(input): Form<CreateUser>) -> String {
+async fn submit_user_form(
+    State(app_state): State<AppState>,
+    Form(input): Form<CreateUser>,
+) -> String {
+    let pool = app_state.pool;
     dbg!(&input);
     let user = create_user(&pool, input).await.unwrap();
     dbg!(&user);
