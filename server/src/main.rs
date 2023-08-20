@@ -10,7 +10,10 @@ use axum::routing::get;
 use axum::Form;
 use axum::Router;
 use axum_macros::debug_handler;
+use clokwerk::AsyncScheduler;
+use clokwerk::Job;
 use log::error;
+use log::info;
 use serde::Deserialize;
 use sqlx::sqlite::SqlitePoolOptions;
 use sqlx::sqlite::SqliteRow;
@@ -18,6 +21,7 @@ use sqlx::Row;
 use sqlx::SqlitePool;
 use std::error::Error;
 use std::net::SocketAddr;
+use std::time::Duration;
 use std::{dbg, env};
 
 use bin_stuff::User;
@@ -73,11 +77,28 @@ async fn main() -> Result<(), Box<dyn Error>> {
         aws_client,
         from_email_address,
     };
+    let scheduler_app_state = app_state.clone();
+
     let app = Router::new()
         .route("/", get(show_create_user_form).post(submit_user_form))
         .route("/users", get(show_all_users_page))
-        .route("/send_email", get(emails))
         .with_state(app_state);
+
+    let mut scheduler = AsyncScheduler::new();
+
+    scheduler
+        .every(clokwerk::Interval::Sunday)
+        .at("7:00 pm")
+        .run(move || scrape_and_email_stuff(scheduler_app_state.clone()));
+
+    let mut scheduler_poll_interval = tokio::time::interval(Duration::from_secs(60));
+    tokio::spawn(async move {
+        loop {
+            scheduler_poll_interval.tick().await;
+            info!("Running any pending scheduled jobs");
+            scheduler.run_pending().await;
+        }
+    });
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     axum::Server::bind(&addr)
@@ -88,10 +109,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     return Ok(());
 }
 
-async fn emails(State(app_state): State<AppState>) -> String {
-    // TODO: Temp method whilst setting up job scheduling
-    let pool = app_state.pool;
-    let people_to_notify = get_all_users(&pool).await.unwrap();
+async fn scrape_and_email_stuff(app_state: AppState) {
+    info!("Running email stuff now");
+    let people_to_notify = get_all_users(&app_state.pool).await.unwrap();
     if let Err(e) = do_the_stuff(
         &people_to_notify,
         &app_state.aws_client,
@@ -102,7 +122,6 @@ async fn emails(State(app_state): State<AppState>) -> String {
         error!("{}", e);
         // return Err(e);
     }
-    return "Wow".to_string();
 }
 
 #[debug_handler]

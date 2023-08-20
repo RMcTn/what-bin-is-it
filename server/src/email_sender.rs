@@ -12,6 +12,8 @@ pub async fn do_the_stuff(
     for person in users {
         println!("Found {:?}", person);
         // TODO: Split out the scraping from the email sending
+        // TODO: Keep track who has been sent an email so errors don't cause a retry, meaning
+        // multiple emails to the same person or something
         //
         // It's likely if the scraper fails for one person after all attempts, it will fail for all
         // Can pull this out if we want to continue for other people after a scraping error
