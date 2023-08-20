@@ -28,6 +28,8 @@ use bin_stuff::User;
 
 use crate::email_sender::do_the_stuff;
 
+// TODO: Get geckodriver on docker compose
+//
 // TODO: Store DB in docker volume or something
 // TODO: Auth for pages (Or just remove it for now?)
 
@@ -104,7 +106,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     });
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
+
+    info!("Listening on {}", &addr);
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
         .await

@@ -4,6 +4,6 @@
 if [ -z $1 ]; then 
 	echo "Need to provide a host";
 else
-	scp -r Cargo.toml Cargo.lock root@$1:/root/what-bin-is-it
-	scp -r src/* root@$1:/root/what-bin-is-it/src/
+	scp -r Cargo.toml Cargo.lock build.rs docker-compose.yml Dockerfile root@$1:/root/what-bin-is-it
+	scp -r scraper bin_stuff server migrations .sqlx root@$1:/root/what-bin-is-it
 fi
