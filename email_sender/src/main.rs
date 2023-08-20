@@ -6,7 +6,11 @@ use aws_sdk_sesv2::{
     Client,
 };
 use log::{error, info};
-use sqlx::sqlite::SqlitePoolOptions;
+use sqlx::Row;
+use sqlx::{
+    sqlite::{SqlitePoolOptions, SqliteRow},
+    SqlitePool,
+};
 
 use bin_stuff::{next_collection_date_for_bin, next_collection_date_from, NextBinCollection, User};
 
@@ -35,20 +39,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .await?;
 
     sqlx::migrate!("../migrations").run(&pool).await?;
-
-    let records = sqlx::query!("SELECT id, email, postcode, address FROM emails")
-        .fetch_all(&pool)
-        .await?;
-    let mut people_to_notify = vec![];
-    for record in records {
-        let user = User {
-            _id: record.id,
-            email: record.email,
-            postcode: record.postcode,
-            address: record.address,
-        };
-        people_to_notify.push(user);
-    }
+    let people_to_notify = get_all_users(&pool).await?;
 
     // Need to scrape the page from an actual browser. Tried curl/reqwest requests, but submitting
     // the post request would redirect back to the first page. Some sort of request token missing
@@ -62,6 +53,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     return Ok(());
+}
+
+async fn get_all_users(pool: &SqlitePool) -> Result<Vec<User>, Box<dyn Error>> {
+    // TODO: We've got this in two places now. what do we actually want to do with this "shared"
+    // database logic? Should the email sender just be a method called weekly from the main server?
+    // Would make things much easier
+    // TODO: Paging at some point
+    let users = sqlx::query("SELECT id, email, postcode, address FROM emails")
+        .map(|row: SqliteRow| User {
+            _id: row.get("id"),
+            email: row.get("email"),
+            postcode: row.get("postcode"),
+            address: row.get("address"),
+        })
+        .fetch_all(pool)
+        .await?;
+
+    return Ok(users);
 }
 
 async fn do_the_stuff(
