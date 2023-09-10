@@ -15,7 +15,8 @@ pub async fn get_stuff(postcode: &str, address: &str) -> Result<Vec<BinDates>, B
 
     let client = match ClientBuilder::native()
         .capabilities(capabilities)
-        .connect("http://localhost:4444")
+        // TODO: Geckodriver URL as env var
+        .connect("http://127.0.0.1:4444")
         .await
     {
         Ok(client) => client,
