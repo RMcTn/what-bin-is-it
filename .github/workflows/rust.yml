@@ -1,5 +1,6 @@
 name: Rust
 
+
 on:
   push:
     branches: [ "master" ]
@@ -14,8 +15,10 @@ jobs:
 
     runs-on: ubuntu-latest
 
+      
     steps:
     - uses: actions/checkout@v3
+    - uses: Swatinem/rust-cache@v2.7.0
     - name: Build
       run: cargo build --verbose
       env:
