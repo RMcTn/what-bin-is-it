@@ -6,9 +6,12 @@ Pulls emails, postcodes, and addresses to check from the sqlite database file gi
 
 ```
 brew install geckodriver
+brew install zig
+cargo install cargo-zigbuild
 ```
 
 Run ```geckodriver``` before running the program
+
 
 
 ## Required ENV vars
