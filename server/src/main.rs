@@ -46,6 +46,7 @@ struct AppState {
     pool: SqlitePool,
     aws_client: Client,
     from_email_address: String,
+    geckodriver_url: String,
 }
 
 #[tokio::main]
@@ -61,6 +62,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let _aws_secret_access_key =
         env::var("AWS_SECRET_ACCESS_KEY").expect("AWS_SECRET_ACCESS_KEY must be specified");
     let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be specified");
+    let geckodriver_url_default = "http://127.0.0.1:4444".to_string();
+    let geckodriver_url = match env::var("GECKODRIVER_URL") {
+        Ok(url) => url,
+        Err(_) => {
+            info!(
+                "GECKODRIVER_URL was not specified. Defaulting to {}",
+                geckodriver_url_default
+            );
+            geckodriver_url_default
+        }
+    };
     let region_provider = RegionProviderChain::default_provider().or_else("eu-west-1");
     let config = aws_config::from_env().region(region_provider).load().await;
     let aws_client = Client::new(&config);
@@ -81,6 +93,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         pool,
         aws_client,
         from_email_address,
+        geckodriver_url,
     };
     let scheduler_app_state = app_state.clone();
 
@@ -124,6 +137,7 @@ async fn scrape_and_email_stuff(app_state: AppState) {
         &people_to_notify,
         &app_state.aws_client,
         &app_state.from_email_address,
+        app_state.geckodriver_url,
     )
     .await
     {

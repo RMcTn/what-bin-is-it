@@ -8,6 +8,7 @@ pub async fn do_the_stuff(
     users: &[User],
     aws_client: &aws_sdk_sesv2::Client,
     from_email_address: &str,
+    geckodriver_url: String,
 ) -> Result<(), Box<dyn Error>> {
     for person in users {
         println!("Found {:?}", person);
@@ -20,7 +21,12 @@ pub async fn do_the_stuff(
         // Need to scrape the page from an actual browser. Tried curl/reqwest requests, but submitting
         // the post request would redirect back to the first page. Some sort of request token missing
         // when we do this or something (first step of form submission changes the url).
-        let bins = scraper::get_stuff(&person.postcode, &person.address).await?;
+        let bins = scraper::get_stuff(
+            &person.postcode,
+            &person.address,
+            Some(geckodriver_url.clone()),
+        )
+        .await?;
 
         let today = chrono::Utc::now().date_naive();
         let next_collection_date = next_collection_date_from(today);

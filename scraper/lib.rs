@@ -8,15 +8,26 @@ use fantoccini::{Client, ClientBuilder, Locator};
 use bin_stuff::{Bin, BinDates};
 use log::{error, info};
 
-pub async fn get_stuff(postcode: &str, address: &str) -> Result<Vec<BinDates>, Box<dyn Error>> {
+pub async fn get_stuff(
+    postcode: &str,
+    address: &str,
+    driver_url: Option<String>,
+) -> Result<Vec<BinDates>, Box<dyn Error>> {
     let mut capabilities = Capabilities::new();
     let options = serde_json::json!({ "args": ["--headless"] });
     capabilities.insert("moz:firefoxOptions".to_string(), options);
 
+    info!("Attempting to connect to webdriver client");
+    let default_driver_url = "http://127.0.0.1:4444".to_string();
+    if driver_url.is_none() {
+        info!(
+            "No driver_url provided. Defaulting to {}",
+            default_driver_url
+        );
+    }
     let client = match ClientBuilder::native()
         .capabilities(capabilities)
-        // TODO: Geckodriver URL as env var
-        .connect("http://127.0.0.1:4444")
+        .connect(&driver_url.unwrap_or("http://127.0.0.1:4444".to_string()))
         .await
     {
         Ok(client) => client,
@@ -25,6 +36,7 @@ pub async fn get_stuff(postcode: &str, address: &str) -> Result<Vec<BinDates>, B
             return Err(Box::new(e));
         }
     };
+    info!("Got webdriver client");
 
     // NOTE: Some of the fields get different IDs when submitting each step it seems
     let max_attempts = 3;
