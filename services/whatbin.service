@@ -1,0 +1,11 @@
+[Unit]
+Description=What bin is it server binary
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=/root/what-bin-is-it/.env
+ExecStart=/root/what-bin-is-it/server
+
+[Install]
+WantedBy=multi-user.target

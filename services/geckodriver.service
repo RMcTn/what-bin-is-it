@@ -1,0 +1,10 @@
+[Unit]
+Description=Gecko driver
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=geckodriver --profile-root /root/geckodriver-profiles
+
+[Install]
+WantedBy=multi-user.target
