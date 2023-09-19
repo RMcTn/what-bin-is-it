@@ -1,36 +1,35 @@
 #![allow(clippy::needless_return)]
 
-pub mod email_sender;
+use std::{dbg, env};
+use std::error::Error;
+use std::net::SocketAddr;
+use std::time::Duration;
 
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_sesv2::Client;
 use axum::extract::State;
-use axum::response::Html;
-use axum::routing::get;
 use axum::Form;
+use axum::response::Html;
 use axum::Router;
+use axum::routing::get;
 use axum_macros::debug_handler;
 use clokwerk::AsyncScheduler;
 use clokwerk::Job;
 use log::error;
 use log::info;
 use serde::Deserialize;
+use sqlx::Row;
 use sqlx::sqlite::SqlitePoolOptions;
 use sqlx::sqlite::SqliteRow;
-use sqlx::Row;
 use sqlx::SqlitePool;
-use std::error::Error;
-use std::net::SocketAddr;
-use std::time::Duration;
-use std::{dbg, env};
 
+use bin_stuff::next_bin_collection_date;
 use bin_stuff::User;
 
-use crate::email_sender::do_the_stuff;
+use crate::email_sender::email_user;
 
-// TODO: Get geckodriver on docker compose
-//
-// TODO: Store DB in docker volume or something
+pub mod email_sender;
+
 // TODO: Auth for pages (Or just remove it for now?)
 
 // TODO:  Some gotchas that need solved:
@@ -133,16 +132,32 @@ async fn main() -> Result<(), Box<dyn Error>> {
 async fn scrape_and_email_stuff(app_state: AppState) {
     info!("Running email stuff now");
     let people_to_notify = get_all_users(&app_state.pool).await.unwrap();
-    if let Err(e) = do_the_stuff(
-        &people_to_notify,
-        &app_state.aws_client,
-        &app_state.from_email_address,
-        app_state.geckodriver_url,
-    )
-    .await
-    {
-        error!("{}", e);
-        // return Err(e);
+    for user in &people_to_notify {
+        info!("Beginning scraping for {}", user.email);
+        // TODO: Store the scraped date somewhere?
+        //  What's the use? lets us separate emails i guess
+        let bins = scraper::get_stuff(
+            &user.postcode,
+            &user.address,
+            Some(app_state.geckodriver_url.clone()),
+        )
+            .await
+            .unwrap();
+        let today = chrono::Utc::now().date_naive();
+        let next_bin_collection = next_bin_collection_date(&bins, today);
+        info!("Beginning emailing for {}", user.email);
+        // TODO: Keep track of users that have successfully been sent an email so a retry doesn't
+        // happen unexpectedly
+        if let Err(e) = email_user(
+            user,
+            &next_bin_collection,
+            &app_state.aws_client,
+            &app_state.from_email_address,
+        )
+            .await
+        {
+            error!("{}", e);
+        }
     }
 }
 

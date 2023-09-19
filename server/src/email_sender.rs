@@ -2,70 +2,22 @@ use std::error::Error;
 
 use aws_sdk_sesv2::types::{Body, Content, Destination, EmailContent, Message};
 
-use bin_stuff::{next_collection_date_for_bin, next_collection_date_from, NextBinCollection, User};
+use bin_stuff::{NextBinCollection, User};
 
-pub async fn do_the_stuff(
-    users: &[User],
+pub async fn email_user(
+    user: &User,
+    next_bin_collection: &NextBinCollection,
     aws_client: &aws_sdk_sesv2::Client,
     from_email_address: &str,
-    geckodriver_url: String,
 ) -> Result<(), Box<dyn Error>> {
-    for person in users {
-        println!("Found {:?}", person);
-        // TODO: Split out the scraping from the email sending
-        // TODO: Keep track who has been sent an email so errors don't cause a retry, meaning
-        // multiple emails to the same person or something
-        //
-        // It's likely if the scraper fails for one person after all attempts, it will fail for all
-        // Can pull this out if we want to continue for other people after a scraping error
-        // Need to scrape the page from an actual browser. Tried curl/reqwest requests, but submitting
-        // the post request would redirect back to the first page. Some sort of request token missing
-        // when we do this or something (first step of form submission changes the url).
-        let bins = scraper::get_stuff(
-            &person.postcode,
-            &person.address,
-            Some(geckodriver_url.clone()),
-        )
-        .await?;
-
-        let today = chrono::Utc::now().date_naive();
-        let next_collection_date = next_collection_date_from(today);
-
-        dbg!(next_collection_date);
-        let mut next_collection_day_for_bins = Vec::new();
-        for bin in bins {
-            let next_day = next_collection_date_for_bin(&bin, next_collection_date);
-            next_collection_day_for_bins.push(next_day);
-        }
-
-        let mut closest_bin_day = next_collection_day_for_bins[0];
-        let mut closest_bin_days = Vec::new();
-        for bin_day in next_collection_day_for_bins {
-            if bin_day.date == closest_bin_day.date {
-                closest_bin_days.push(bin_day);
-            }
-            if bin_day.date < closest_bin_day.date {
-                closest_bin_day = bin_day;
-                closest_bin_days.clear();
-                closest_bin_days.push(bin_day);
-            }
-        }
-
-        let next_bin_collection = NextBinCollection {
-            bins: closest_bin_days,
-        };
-
-        println!("Next bins:");
-
-        let email = build_email_to_send(
-            &next_bin_collection,
-            &person,
-            &aws_client,
-            &from_email_address,
-        );
-        email.send().await?;
-        println!("Email sent");
-    }
+    let email = build_email_to_send(
+        &next_bin_collection,
+        &user,
+        &aws_client,
+        &from_email_address,
+    );
+    email.send().await?;
+    println!("Email sent");
     return Ok(());
 }
 
