@@ -1,16 +1,15 @@
 use chrono::{Datelike, NaiveDate};
 
-/// Assuming monday is collection day for time being
-pub fn next_collection_date_from(date: NaiveDate) -> NaiveDate {
-    let date_weekday = date.weekday();
-
-    let days_from_monday =
-        chrono::Duration::days(chrono::Weekday::num_days_from_monday(&date_weekday) as i64);
-    let number_of_days_in_week = chrono::Duration::days(7);
-    let days_till_monday = number_of_days_in_week - days_from_monday;
-    dbg!(days_till_monday.num_days());
-
-    return date + days_till_monday;
+/// Date returned will be 1 week from target_date if collection_day is the same day as target_date
+/// Assumption is that we don't request the collection date on the same day
+pub fn next_collection_date_from(target_date: NaiveDate, collection_day: chrono::Weekday) -> NaiveDate {
+    let mut days_until_collection = 1; //
+    let mut target_day = target_date.weekday();
+    while target_day.succ() != collection_day {
+        target_day = target_day.succ();
+        days_until_collection += 1;
+    }
+    return target_date + chrono::Duration::days(days_until_collection);
 }
 
 pub fn next_collection_date_for_bin(
@@ -108,15 +107,25 @@ mod tests {
     }
 
     mod next_collection_date {
+        use chrono::Weekday;
+
         use crate::next_collection_date_from;
 
         #[test]
-        fn it_calculates_next_monday_collection_date() {
+        fn it_calculates_next_collection_date_for_given_weekday() {
             let date = "2023-07-28";
             let date = chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").unwrap();
-            let next_collection_date = next_collection_date_from(date);
+            let next_collection_date = next_collection_date_from(date, Weekday::Mon);
 
             let expected_collection_date = "2023-07-31";
+            let expected_collection_date =
+                chrono::NaiveDate::parse_from_str(&expected_collection_date, "%Y-%m-%d").unwrap();
+
+            assert_eq!(next_collection_date, expected_collection_date);
+
+            let next_collection_date = next_collection_date_from(date, Weekday::Wed);
+
+            let expected_collection_date = "2023-08-02";
             let expected_collection_date =
                 chrono::NaiveDate::parse_from_str(&expected_collection_date, "%Y-%m-%d").unwrap();
 
@@ -127,7 +136,7 @@ mod tests {
         fn same_day_of_week_calculates_next_week() {
             let date = "2023-07-31";
             let date = chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").unwrap();
-            let next_collection_date = next_collection_date_from(date);
+            let next_collection_date = next_collection_date_from(date, Weekday::Mon);
 
             let expected_collection_date = "2023-08-07";
             let expected_collection_date =

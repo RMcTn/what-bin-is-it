@@ -1,6 +1,7 @@
 use std::error::Error;
 
 use aws_sdk_sesv2::types::{Body, Content, Destination, EmailContent, Message};
+use chrono::Weekday;
 
 use bin_stuff::{next_collection_date_for_bin, next_collection_date_from, NextBinCollection, User};
 
@@ -26,10 +27,10 @@ pub async fn do_the_stuff(
             &person.address,
             Some(geckodriver_url.clone()),
         )
-        .await?;
+            .await?;
 
         let today = chrono::Utc::now().date_naive();
-        let next_collection_date = next_collection_date_from(today);
+        let next_collection_date = next_collection_date_from(today, Weekday::Mon);
 
         dbg!(next_collection_date);
         let mut next_collection_day_for_bins = Vec::new();
@@ -133,9 +134,10 @@ fn bins_subject(next_bin_collection: &NextBinCollection) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_eq;
+
     use bin_stuff::Bin;
     use bin_stuff::NextBinCollectionDay;
-    use std::assert_eq;
 
     use super::*;
 
