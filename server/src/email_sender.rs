@@ -1,6 +1,7 @@
 use std::error::Error;
 
 use aws_sdk_sesv2::types::{Body, Content, Destination, EmailContent, Message};
+use chrono::Weekday;
 
 use bin_stuff::{NextBinCollection, User};
 
@@ -85,9 +86,10 @@ fn bins_subject(next_bin_collection: &NextBinCollection) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_eq;
+
     use bin_stuff::Bin;
     use bin_stuff::NextBinCollectionDay;
-    use std::assert_eq;
 
     use super::*;
 

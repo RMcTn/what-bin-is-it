@@ -1,17 +1,15 @@
 use chrono::{Datelike, NaiveDate};
 
-/// Assuming monday is collection day for time being
-pub fn next_collection_date_from(date: NaiveDate) -> NaiveDate {
-    let date_weekday = date.weekday();
-    // TODO: Remove monday collection day assumption
-
-    let days_from_monday =
-        chrono::Duration::days(chrono::Weekday::num_days_from_monday(&date_weekday) as i64);
-    let number_of_days_in_week = chrono::Duration::days(7);
-    let days_till_monday = number_of_days_in_week - days_from_monday;
-    dbg!(days_till_monday.num_days());
-
-    return date + days_till_monday;
+/// Date returned will be 1 week from target_date if collection_day is the same day as target_date
+/// Assumption is that we don't request the collection date on the same day
+pub fn next_collection_date_from(target_date: NaiveDate, collection_day: chrono::Weekday) -> NaiveDate {
+    let mut days_until_collection = 1; //
+    let mut target_day = target_date.weekday();
+    while target_day.succ() != collection_day {
+        target_day = target_day.succ();
+        days_until_collection += 1;
+    }
+    return target_date + chrono::Duration::days(days_until_collection);
 }
 
 pub fn next_collection_date_for_bin(
@@ -31,37 +29,7 @@ pub fn next_collection_date_for_bin(
     };
 }
 
-pub fn next_bin_collection_date(bins: &[BinDates], target_date: NaiveDate) -> NextBinCollection {
-    let next_collection_date = next_collection_date_from(target_date);
-
-    dbg!(next_collection_date);
-    let mut next_collection_day_for_bins = Vec::new();
-    for bin in bins {
-        let next_day = next_collection_date_for_bin(&bin, next_collection_date);
-        next_collection_day_for_bins.push(next_day);
-    }
-
-    let mut closest_bin_day = next_collection_day_for_bins[0];
-    let mut closest_bin_days = Vec::new();
-    for bin_day in next_collection_day_for_bins {
-        if bin_day.date == closest_bin_day.date {
-            closest_bin_days.push(bin_day);
-        }
-        if bin_day.date < closest_bin_day.date {
-            closest_bin_day = bin_day;
-            closest_bin_days.clear();
-            closest_bin_days.push(bin_day);
-        }
-    }
-
-    let next_bin_collection = NextBinCollection {
-        bins: closest_bin_days,
-    };
-
-    return next_bin_collection;
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy)]
 pub enum Bin {
     Black,
     Blue,
@@ -111,8 +79,6 @@ fn calculate_differences_from_date(
     dates: &[NaiveDate],
     target_date: NaiveDate,
 ) -> Vec<TimeFromTarget> {
-    dbg!(target_date);
-    dbg!(&dates);
     let differences: Vec<TimeFromTarget> = dates
         .iter()
         .map(|date| TimeFromTarget {
@@ -122,7 +88,6 @@ fn calculate_differences_from_date(
         })
         .filter(|time_from_target| time_from_target.how_far_from_target.num_seconds() >= 0)
         .collect();
-
     return differences;
 }
 
@@ -142,15 +107,25 @@ mod tests {
     }
 
     mod next_collection_date {
-        use crate::{Bin, BinDates, next_bin_collection_date, next_collection_date_from};
+        use chrono::Weekday;
+
+        use crate::next_collection_date_from;
 
         #[test]
-        fn it_calculates_next_monday_collection_date() {
+        fn it_calculates_next_collection_date_for_given_weekday() {
             let date = "2023-07-28";
             let date = chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").unwrap();
-            let next_collection_date = next_collection_date_from(date);
+            let next_collection_date = next_collection_date_from(date, Weekday::Mon);
 
             let expected_collection_date = "2023-07-31";
+            let expected_collection_date =
+                chrono::NaiveDate::parse_from_str(&expected_collection_date, "%Y-%m-%d").unwrap();
+
+            assert_eq!(next_collection_date, expected_collection_date);
+
+            let next_collection_date = next_collection_date_from(date, Weekday::Wed);
+
+            let expected_collection_date = "2023-08-02";
             let expected_collection_date =
                 chrono::NaiveDate::parse_from_str(&expected_collection_date, "%Y-%m-%d").unwrap();
 
@@ -161,45 +136,13 @@ mod tests {
         fn same_day_of_week_calculates_next_week() {
             let date = "2023-07-31";
             let date = chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").unwrap();
-            let next_collection_date = next_collection_date_from(date);
+            let next_collection_date = next_collection_date_from(date, Weekday::Mon);
 
             let expected_collection_date = "2023-08-07";
             let expected_collection_date =
                 chrono::NaiveDate::parse_from_str(&expected_collection_date, "%Y-%m-%d").unwrap();
 
             assert_eq!(next_collection_date, expected_collection_date);
-        }
-
-        #[test]
-        fn it_returns_bin_with_nearest_collection_date_from_given_date() {
-            let date = "2023-07-31";
-            let date = chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").unwrap();
-            let yesterday = date - chrono::Duration::days(1);
-            // TODO: Not happy with the dates in this test since our collection date is always
-            //  assumed to be monday
-            let six_days_from_now = date + chrono::Duration::days(6);
-            let one_week_from_now = date + chrono::Duration::days(7);
-
-            let green_date = vec![one_week_from_now];
-            let green_bin_date = BinDates {
-                bin: Bin::Green,
-                dates: green_date,
-            };
-            let black_date = vec![one_week_from_now];
-            let black_bin_date = BinDates {
-                bin: Bin::Black,
-                dates: black_date,
-            };
-            let blue_date = vec![one_week_from_now];
-            let blue_bin_date = BinDates {
-                bin: Bin::Blue,
-                dates: blue_date,
-            };
-            let bin_dates = [black_bin_date, blue_bin_date, green_bin_date];
-            let next_bins_date = next_bin_collection_date(&bin_dates, date);
-            let bins_to_be_collected: Vec<Bin> = next_bins_date.bins.iter().map(|bins| bins.bin).collect();
-            let expected_bins_to_be_collected = vec![Bin::Black, Bin::Blue];
-            assert!(bins_to_be_collected.iter().eq(expected_bins_to_be_collected.iter()));
         }
     }
 }
