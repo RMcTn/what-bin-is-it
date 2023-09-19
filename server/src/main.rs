@@ -144,7 +144,11 @@ async fn scrape_and_email_stuff(app_state: AppState) {
             .await
             .unwrap();
         let today = chrono::Utc::now().date_naive();
-        let next_bin_collection = next_bin_collection_date(&bins, today);
+        let next_bin_collection = next_bin_collection_date(
+            &bins,
+            today,
+            chrono::Weekday::Mon, // Assuming monday is collection date for now
+        );
         info!("Beginning emailing for {}", user.email);
         // TODO: Keep track of users that have successfully been sent an email so a retry doesn't
         // happen unexpectedly
