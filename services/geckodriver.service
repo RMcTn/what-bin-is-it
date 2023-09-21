@@ -5,6 +5,8 @@ After=network.target
 [Service]
 Type=simple
 ExecStart=geckodriver --profile-root /root/geckodriver-profiles
+Restart=always
+RestartSec=5s
 
 [Install]
 WantedBy=multi-user.target

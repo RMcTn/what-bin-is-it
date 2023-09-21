@@ -6,6 +6,8 @@ After=network.target
 Type=simple
 EnvironmentFile=/root/what-bin-is-it/.env
 ExecStart=/root/what-bin-is-it/server
+Restart=always
+RestartSec=5s
 
 [Install]
 WantedBy=multi-user.target
