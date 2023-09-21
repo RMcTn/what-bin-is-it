@@ -50,8 +50,12 @@ setup-caddy:
 	ssh ${USER}@${WHAT_BIN_HOST} "curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg"
 	ssh ${USER}@${WHAT_BIN_HOST} "curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list"
 	ssh ${USER}@${WHAT_BIN_HOST} "sudo apt update"
-	ssh ${USER}@${WHAT_BIN_HOST} "sudo apt install -y caddy"
+	ssh ${USER}@${WHAT_BIN_HOST} "sudo apt install -y caddy" # Installing like this will auto run the systemd service
 
+deploy-caddy:
+	make host-set-check
+	# TODO: Check the default caddyfile doesn't have important things we've not included in our caddyfile
+	scp -r ./Caddyfile ${USER}@${WHAT_BIN_HOST}:/etc/caddy/Caddyfile # Default caddyfile config location in the systemd service
 
 BIN_SERVICE=whatbin.service
 GECKODRIVER_SERVICE=geckodriver.service
