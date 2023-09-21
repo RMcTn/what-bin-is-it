@@ -1,26 +1,26 @@
 #![allow(clippy::needless_return)]
 
-use std::{dbg, env};
 use std::error::Error;
 use std::net::SocketAddr;
 use std::time::Duration;
+use std::{dbg, env};
 
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_sesv2::Client;
 use axum::extract::State;
-use axum::Form;
 use axum::response::Html;
-use axum::Router;
 use axum::routing::get;
+use axum::Form;
+use axum::Router;
 use axum_macros::debug_handler;
 use clokwerk::AsyncScheduler;
 use clokwerk::Job;
 use log::error;
 use log::info;
 use serde::Deserialize;
-use sqlx::Row;
 use sqlx::sqlite::SqlitePoolOptions;
 use sqlx::sqlite::SqliteRow;
+use sqlx::Row;
 use sqlx::SqlitePool;
 
 use bin_stuff::next_bin_collection_date;
@@ -29,6 +29,8 @@ use bin_stuff::User;
 use crate::email_sender::email_user;
 
 pub mod email_sender;
+
+// TODO: Dry run without emails
 
 // TODO: Auth for pages (Or just remove it for now?)
 
@@ -141,8 +143,8 @@ async fn scrape_and_email_stuff(app_state: AppState) {
             &user.address,
             Some(app_state.geckodriver_url.clone()),
         )
-            .await
-            .unwrap();
+        .await
+        .unwrap();
         let today = chrono::Utc::now().date_naive();
         let next_bin_collection = next_bin_collection_date(
             &bins,
@@ -158,7 +160,7 @@ async fn scrape_and_email_stuff(app_state: AppState) {
             &app_state.aws_client,
             &app_state.from_email_address,
         )
-            .await
+        .await
         {
             error!("{}", e);
         }
