@@ -12,8 +12,6 @@ cargo install cargo-zigbuild
 
 Run ```geckodriver``` before running the program
 
-
-
 ## Required ENV vars
 See https://docs.aws.amazon.com/ses/latest/dg/setting-up.html for AWS related credentials
 
@@ -21,10 +19,15 @@ AWS_ACCESS_KEY_ID
 AWS_SECRET_ACCESS_KEY  
 FROM_EMAIL_ADDRESS  
 DATABASE_URL
+ADMIN_PASSWORD
 
 ## Dependencies
 ```cargo install sqlx-cli```
 
 ## Cross compile
-```cargo install cross --git https://github.com/cross-rs/cross```
-```cross build --target aarch64-unknown-linux-gnu```
+requires Zig
+```
+brew install zig
+cargo install cargo-zigbuild
+make build-for-server
+```

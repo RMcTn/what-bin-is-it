@@ -52,6 +52,7 @@ struct AppState {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    // TODO: Environment based configs like dev/prod
     dotenv::dotenv().ok();
     let env = env_logger::Env::default().default_filter_or("info");
     env_logger::init_from_env(env);
@@ -74,6 +75,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             geckodriver_url_default
         }
     };
+    let admin_password = env::var("ADMIN_PASSWORD").expect("ADMIN_PASSWORD must be specified");
+
     let region_provider = RegionProviderChain::default_provider().or_else("eu-west-1");
     let config = aws_config::from_env().region(region_provider).load().await;
     let aws_client = Client::new(&config);
