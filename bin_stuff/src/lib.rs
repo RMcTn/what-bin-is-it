@@ -32,7 +32,11 @@ pub fn next_collection_date_for_bin(
     });
 }
 
-pub fn next_bin_collection_date(bins: &[BinDates], target_date: NaiveDate, target_weekday: chrono::Weekday) -> NextBinCollection {
+pub fn next_bin_collection_date(
+    bins: &[BinDates],
+    target_date: NaiveDate,
+    target_weekday: chrono::Weekday,
+) -> NextBinCollection {
     let next_collection_date = next_collection_date_from(target_date, target_weekday);
 
     dbg!(next_collection_date);
@@ -47,7 +51,6 @@ pub fn next_bin_collection_date(bins: &[BinDates], target_date: NaiveDate, targe
             None => continue,
         }
     }
-
 
     let mut closest_bin_day = next_collection_day_for_bins[0];
     let mut closest_bin_days = Vec::new();
@@ -128,7 +131,7 @@ fn calculate_differences_from_date(
         .filter(|time_from_target| time_from_target.how_far_from_target.num_seconds() >= 0)
         .collect();
 
-// TODO: Add test for this case?
+    // TODO: Add test for this case?
     if differences.is_empty() {
         return None;
     }
@@ -153,7 +156,7 @@ mod tests {
     mod next_collection_date {
         use chrono::{Datelike, Weekday};
 
-        use crate::{Bin, BinDates, next_bin_collection_date, next_collection_date_from};
+        use crate::{next_bin_collection_date, next_collection_date_from, Bin, BinDates};
 
         #[test]
         fn it_calculates_next_collection_date_for_given_weekday() {
@@ -211,15 +214,15 @@ mod tests {
             let expected_bin_dates = [blue_bin_date.dates[0], black_bin_date.dates[0]];
             let bins = [green_bin_date, blue_bin_date, black_bin_date];
 
-            let next_bin_collection = next_bin_collection_date(
-                &bins,
-                today,
-                today.weekday(),
-            );
+            let next_bin_collection = next_bin_collection_date(&bins, today, today.weekday());
             let bins_to_be_collected: Vec<_> =
                 next_bin_collection.bins.iter().map(|bin| bin.bin).collect();
             assert!(bins_to_be_collected.iter().eq(expected_bins.iter()));
-            let bins_collected_on: Vec<_> = next_bin_collection.bins.iter().map(|bin| bin.date).collect();
+            let bins_collected_on: Vec<_> = next_bin_collection
+                .bins
+                .iter()
+                .map(|bin| bin.date)
+                .collect();
             assert!(bins_collected_on.iter().eq(expected_bin_dates.iter()));
         }
     }
