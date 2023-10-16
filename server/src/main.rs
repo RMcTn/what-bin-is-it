@@ -3,6 +3,7 @@
 // every day or something?
 // TODO: Please stick a "retry" button in for the annoying failures. Until we move to some
 // job system anyway
+// TODO: Generic sign in redirect even for 404's? (If not signed in)
 #![allow(clippy::needless_return)]
 
 use std::error::Error;
@@ -222,9 +223,7 @@ async fn submit_user_form(
     Form(input): Form<CreateUser>,
 ) -> impl IntoResponse {
     let pool = app_state.pool;
-    dbg!(&input);
     let user = create_user(&pool, input).await.unwrap();
-    dbg!(&user);
     let redirect = Redirect::to(USERS_ROUTE).into_response();
     return redirect.into_response();
 }
@@ -299,10 +298,10 @@ async fn auth_middleware<B>(
 #[debug_handler]
 async fn root_page(TypedHeader(cookie): TypedHeader<axum::headers::Cookie>) -> impl IntoResponse {
     if let Some(session_id) = cookie.get("session_id") {
-        dbg!(session_id);
         // TODO: Please stick a "retry" button in for the annoying failures. Until we move to some
         // job system anyway
-        return Html("Nothing yet".to_string()).into_response();
+        let users_page_link = format!("<a href='{}'>Users</a>", USERS_ROUTE);
+        return Html(users_page_link).into_response();
     } else {
         let redirect = Redirect::to("/signin").into_response();
         return redirect.into_response();
