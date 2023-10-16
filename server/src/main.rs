@@ -7,6 +7,7 @@
 
 use std::error::Error;
 use std::net::SocketAddr;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{dbg, env};
@@ -136,6 +137,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
         // .route("/create_user", get(show_create_user_form).post(submit_user_form))
         // .route("/users", get(show_all_users_page))
         .with_state(app_state);
+
+    let run_now_path = Path::new("./run-now");
+    if run_now_path.exists() {
+        info!("run-now file found, forcing a run immediately and removing the run-now file");
+        std::fs::remove_file(run_now_path)?;
+        scrape_and_email_stuff(scheduler_app_state.clone()).await;
+    } else {
+        info!("run-now file not found, will not force a run immediately");
+    }
 
     let mut scheduler = AsyncScheduler::new();
 

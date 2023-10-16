@@ -60,6 +60,7 @@ deploy-caddy:
 BIN_SERVICE=whatbin.service
 GECKODRIVER_SERVICE=geckodriver.service
 services-setup:
+	make host-set-check
 	scp -r ./services/${BIN_SERVICE} ${USER}@${WHAT_BIN_HOST}:/lib/systemd/system/${BIN_SERVICE}
 	scp -r ./services/${GECKODRIVER_SERVICE} ${USER}@${WHAT_BIN_HOST}:/lib/systemd/system/${GECKODRIVER_SERVICE}
 	ssh ${USER}@${WHAT_BIN_HOST} "systemctl daemon-reload"
