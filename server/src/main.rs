@@ -122,21 +122,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
     };
     let scheduler_app_state = app_state.clone();
 
-    // TODO: Might be worth having a separate auth required router so we don't accidentally expose
-    // routes
-    let app = Router::new()
-        .route(
-            "/",
-            get(root_page).route_layer(axum::middleware::from_fn_with_state(
-                app_state.clone(),
-                auth_middleware,
-            )),
-        )
+    let unprotected_routes = Router::new()
         .route("/signin", get(sign_in_page))
         .route("/signin", post(sign_in_handler))
-        // .route("/create_user", get(show_create_user_form).post(submit_user_form))
-        // .route("/users", get(show_all_users_page))
+        .with_state(app_state.clone());
+
+    let auth_protected_routes = Router::new()
+        .route("/", get(root_page))
+        .route("/users", get(show_all_users_page))
+        .route(
+            "/create_user",
+            get(show_create_user_form).post(submit_user_form),
+        )
+        .layer(axum::middleware::from_fn_with_state(
+            app_state.clone(),
+            auth_middleware,
+        ))
         .with_state(app_state);
+
+    let app = auth_protected_routes.merge(unprotected_routes);
 
     let run_now_path = Path::new("./run-now");
     if run_now_path.exists() {
@@ -255,8 +259,16 @@ async fn get_all_users(pool: &SqlitePool) -> Result<Vec<User>, Box<dyn Error>> {
     return Ok(users);
 }
 
-async fn show_all_users_page() -> Html<&'static str> {
-    Html("Nothing yet")
+async fn show_all_users_page(State(app_state): State<AppState>) -> Html<String> {
+    let users = get_all_users(&app_state.pool).await.unwrap();
+    let user_emails: Vec<&str> = users.iter().map(|u| u.email.as_str()).collect();
+    let mut html = "<ul><li>".to_string();
+
+    let output = user_emails.join("</li><li>");
+    html.push_str(&output);
+    html.push_str("</li></ul>");
+
+    return Html(html);
 }
 
 async fn auth_middleware<B>(
@@ -353,7 +365,7 @@ async fn show_create_user_form() -> Html<&'static str> {
             <head></head>
             <body>
 
-                    <form action="/" method="post" style="display:flex; flex-direction:column; flex-wrap: wrap">
+                    <form action="/create_user" method="post" style="display:flex; flex-direction:column; flex-wrap: wrap">
                         <label for="email">
                             Enter the email:
                             <input type="text" name="email">
