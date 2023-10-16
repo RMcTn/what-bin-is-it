@@ -70,6 +70,8 @@ struct AppState {
 }
 
 const USERS_ROUTE: &'static str = "/users";
+const CREATE_USER_ROUTE: &'static str = "/create_user";
+const RUN_SCRAPER_NOW_ROUTE: &'static str = "/run";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -134,9 +136,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .route("/", get(root_page))
         .route(USERS_ROUTE, get(show_all_users_page))
         .route(
-            "/create_user",
+            CREATE_USER_ROUTE,
             get(show_create_user_form).post(submit_user_form),
         )
+        .route(RUN_SCRAPER_NOW_ROUTE, get(run_scraper_and_email_handler)) // Probably shouldn't be a get request,
+        // but :shrug:
         .layer(axum::middleware::from_fn_with_state(
             app_state.clone(),
             auth_middleware,
@@ -297,11 +301,21 @@ async fn auth_middleware<B>(
 
 #[debug_handler]
 async fn root_page(TypedHeader(cookie): TypedHeader<axum::headers::Cookie>) -> impl IntoResponse {
-    if let Some(session_id) = cookie.get("session_id") {
+    if let Some(_session_id) = cookie.get("session_id") {
         // TODO: Please stick a "retry" button in for the annoying failures. Until we move to some
         // job system anyway
-        let users_page_link = format!("<a href='{}'>Users</a>", USERS_ROUTE);
-        return Html(users_page_link).into_response();
+        let mut html = "<ul>".to_string();
+        let users_page_link = format!("<li><a href='{}'>Users</a></li>", USERS_ROUTE);
+        let create_user_link = format!("<li><a href='{}'>Create User</a></li>", CREATE_USER_ROUTE);
+        let run_link = format!(
+            "<li><a href='{}'>Run scraper and emails now</a></li>",
+            RUN_SCRAPER_NOW_ROUTE
+        );
+        html.push_str(&users_page_link);
+        html.push_str(&create_user_link);
+        html.push_str(&run_link);
+        html.push_str("</ul>");
+        return Html(html).into_response();
     } else {
         let redirect = Redirect::to("/signin").into_response();
         return redirect.into_response();
@@ -334,6 +348,12 @@ async fn sign_in_handler(
         let redirect = Redirect::to("/signin").into_response();
         return (cookies, redirect);
     }
+}
+
+async fn run_scraper_and_email_handler(State(app_state): State<AppState>) -> impl IntoResponse {
+    scrape_and_email_stuff(app_state.clone()).await;
+    let redirect = Redirect::to("/").into_response();
+    return redirect;
 }
 
 async fn sign_in_page() -> Html<&'static str> {
