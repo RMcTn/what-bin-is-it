@@ -68,6 +68,8 @@ struct AppState {
     current_session_id: Arc<Mutex<Option<String>>>,
 }
 
+const USERS_ROUTE: &'static str = "/users";
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     // TODO: Environment based configs like dev/prod
@@ -129,7 +131,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let auth_protected_routes = Router::new()
         .route("/", get(root_page))
-        .route("/users", get(show_all_users_page))
+        .route(USERS_ROUTE, get(show_all_users_page))
         .route(
             "/create_user",
             get(show_create_user_form).post(submit_user_form),
@@ -218,13 +220,13 @@ async fn scrape_and_email_stuff(app_state: AppState) {
 async fn submit_user_form(
     State(app_state): State<AppState>,
     Form(input): Form<CreateUser>,
-) -> String {
+) -> impl IntoResponse {
     let pool = app_state.pool;
     dbg!(&input);
     let user = create_user(&pool, input).await.unwrap();
     dbg!(&user);
-    // TODO: Redirect to users page
-    return "Wow".to_string();
+    let redirect = Redirect::to(USERS_ROUTE).into_response();
+    return redirect.into_response();
 }
 
 async fn create_user(pool: &SqlitePool, input: CreateUser) -> Result<User, Box<dyn Error>> {
@@ -277,6 +279,7 @@ async fn auth_middleware<B>(
     request: Request<B>,
     next: Next<B>,
 ) -> Response {
+    // TODO: Some tests for this - Can setup a axum server and use this middleware
     if let Some(session_id) = cookies.get("session_id") {
         let current_session_id = app_state.current_session_id.lock().await;
         if current_session_id.is_some() && session_id == current_session_id.as_ref().unwrap() {
