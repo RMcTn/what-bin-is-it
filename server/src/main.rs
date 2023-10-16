@@ -1,27 +1,42 @@
+// TODO: PLEASE - Sent an error email to ourselves when the web scraping fails
+// TODO: If geckodriver continues to be a pain in prod, maybe setup cronjob to restart geckodriver
+// every day or something?
+// TODO: Please stick a "retry" button in for the annoying failures. Until we move to some
+// job system anyway
 #![allow(clippy::needless_return)]
 
 use std::error::Error;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Duration;
 use std::{dbg, env};
 
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_sesv2::Client;
 use axum::extract::State;
-use axum::response::Html;
-use axum::routing::get;
+use axum::http::Request;
+use axum::middleware::Next;
+use axum::response::{Html, IntoResponse, Redirect, Response};
+use axum::routing::{get, post};
 use axum::Form;
 use axum::Router;
+use axum::TypedHeader;
+use axum_extra::extract::cookie::Cookie;
+use axum_extra::extract::CookieJar;
 use axum_macros::debug_handler;
 use clokwerk::AsyncScheduler;
 use clokwerk::Job;
 use log::error;
 use log::info;
+use rand::distributions::Alphanumeric;
+use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
 use serde::Deserialize;
 use sqlx::sqlite::SqlitePoolOptions;
 use sqlx::sqlite::SqliteRow;
 use sqlx::Row;
 use sqlx::SqlitePool;
+use tokio::sync::Mutex;
 
 use bin_stuff::next_bin_collection_date;
 use bin_stuff::User;
@@ -48,6 +63,8 @@ struct AppState {
     aws_client: Client,
     from_email_address: String,
     geckodriver_url: String,
+    admin_password: String,
+    current_session_id: Arc<Mutex<Option<String>>>,
 }
 
 #[tokio::main]
@@ -75,6 +92,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             geckodriver_url_default
         }
     };
+
     let admin_password = env::var("ADMIN_PASSWORD").expect("ADMIN_PASSWORD must be specified");
 
     let region_provider = RegionProviderChain::default_provider().or_else("eu-west-1");
@@ -98,11 +116,23 @@ async fn main() -> Result<(), Box<dyn Error>> {
         aws_client,
         from_email_address,
         geckodriver_url,
+        admin_password,
+        current_session_id: Arc::new(Mutex::new(None)),
     };
     let scheduler_app_state = app_state.clone();
 
+    // TODO: Might be worth having a separate auth required router so we don't accidentally expose
+    // routes
     let app = Router::new()
-        .route("/", get(root_page))
+        .route(
+            "/",
+            get(root_page).route_layer(axum::middleware::from_fn_with_state(
+                app_state.clone(),
+                auth_middleware,
+            )),
+        )
+        .route("/signin", get(sign_in_page))
+        .route("/signin", post(sign_in_handler))
         // .route("/create_user", get(show_create_user_form).post(submit_user_form))
         // .route("/users", get(show_all_users_page))
         .with_state(app_state);
@@ -219,8 +249,90 @@ async fn show_all_users_page() -> Html<&'static str> {
     Html("Nothing yet")
 }
 
-async fn root_page() -> Html<&'static str> {
-    Html("Nothing yet")
+async fn auth_middleware<B>(
+    TypedHeader(cookies): TypedHeader<axum::headers::Cookie>,
+    State(app_state): State<AppState>,
+    request: Request<B>,
+    next: Next<B>,
+) -> Response {
+    if let Some(session_id) = cookies.get("session_id") {
+        let current_session_id = app_state.current_session_id.lock().await;
+        if current_session_id.is_some() && session_id == current_session_id.as_ref().unwrap() {
+            info!("Session IDs matched!");
+            let response = next.run(request).await;
+            return response;
+        }
+        info!("Session ID did not match");
+    } else {
+        info!("No session ID");
+    }
+
+    let redirect = Redirect::to("/signin").into_response();
+    return redirect.into_response();
+}
+
+#[debug_handler]
+async fn root_page(TypedHeader(cookie): TypedHeader<axum::headers::Cookie>) -> impl IntoResponse {
+    if let Some(session_id) = cookie.get("session_id") {
+        dbg!(session_id);
+        // TODO: Please stick a "retry" button in for the annoying failures. Until we move to some
+        // job system anyway
+        return Html("Nothing yet".to_string()).into_response();
+    } else {
+        let redirect = Redirect::to("/signin").into_response();
+        return redirect.into_response();
+    }
+}
+
+async fn sign_in_handler(
+    cookies: CookieJar,
+    State(app_state): State<AppState>,
+    Form(input): Form<SignInDetails>,
+) -> (CookieJar, impl IntoResponse) {
+    // TODO: If session_id already set, do we need to do anything different?
+    if input.password == app_state.admin_password {
+        let rng = StdRng::from_entropy();
+        let session_id: String = rng
+            .sample_iter(&Alphanumeric)
+            .take(32)
+            .map(char::from)
+            .collect();
+
+        let cookies = cookies.add(Cookie::new("session_id", session_id.clone()));
+
+        let mut current_session_id = app_state.current_session_id.lock().await;
+        *current_session_id = Some(session_id.to_owned());
+
+        let redirect = Redirect::to("/").into_response();
+        return (cookies, redirect);
+    } else {
+        info!("Passwords did not match");
+        let redirect = Redirect::to("/signin").into_response();
+        return (cookies, redirect);
+    }
+}
+
+async fn sign_in_page() -> Html<&'static str> {
+    Html(
+        r#"
+        <!doctype html>
+        <html>
+            <head></head>
+            <body>
+
+                    <form action="/signin" method="post" style="display:flex; flex-direction:column; flex-wrap: wrap">
+                        <label for="password">
+                            Enter the password:
+                            <input type="password" name="password">
+                        </label>
+
+                        <input type="submit" value="Sign in">
+                    </form>
+                </div>
+            </body>
+        </html>
+        "#,
+    )
 }
 
 async fn show_create_user_form() -> Html<&'static str> {
@@ -261,4 +373,9 @@ struct CreateUser {
     email: String,
     postcode: String,
     address: String,
+}
+
+#[derive(Deserialize, Debug)]
+struct SignInDetails {
+    password: String,
 }
