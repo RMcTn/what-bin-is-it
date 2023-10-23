@@ -162,7 +162,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     scheduler
         .every(clokwerk::Interval::Sunday)
-        .at("7:00 pm")
+        // Assuming UTC time
+        .at("6:00 pm")
         .run(move || scrape_and_email_stuff(scheduler_app_state.clone()));
 
     let mut scheduler_poll_interval = tokio::time::interval(Duration::from_secs(60));
