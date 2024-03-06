@@ -56,8 +56,8 @@ The `deploy-caddy` make target will:
 
 NOTE: The Caddyfile should be updated to point to the domain you want to use
 ```
-make setup-server WHATBINHOST=<ip for host>
-make deploy-caddy WHATBINHOST=<ip for host>
+make setup-server WHAT_BIN_HOST=<ip for host>
+make deploy-caddy WHAT_BIN_HOST=<ip for host>
 ```
 
 ### Deploying a binary
@@ -67,5 +67,5 @@ The `deploy-to-prod` make target will:
 
 ```
 make build-for-server
-make deploy-to-prod WHATBINHOST=<ip for host>
+make deploy-to-prod WHAT_BIN_HOST=<ip for host>
 ```
