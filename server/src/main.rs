@@ -114,7 +114,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let people_to_notify = get_all_users(&pool).await?;
     for person in &people_to_notify {
-        println!("Found {:?}", person);
+        println!("Found {:?}", person.email);
     }
 
     let app_state = AppState {
