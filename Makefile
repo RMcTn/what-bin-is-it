@@ -67,3 +67,7 @@ services-setup:
 	ssh ${USER}@${WHAT_BIN_HOST} "systemctl enable ${GECKODRIVER_SERVICE}"
 	ssh ${USER}@${WHAT_BIN_HOST} "systemctl restart ${GECKODRIVER_SERVICE}"
 	ssh ${USER}@${WHAT_BIN_HOST} "systemctl enable ${BIN_SERVICE}"
+
+setup-utility-scripts:
+	make host-set-check
+	scp -r ./utility-scripts/* ${USER}@${WHAT_BIN_HOST}:${APP_FOLDER}
