@@ -6,7 +6,7 @@
 // TODO: Generic sign in redirect even for 404's? (If not signed in)
 #![allow(clippy::needless_return)]
 
-use std::error::Error;
+use anyhow::Error;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
@@ -28,7 +28,6 @@ use axum_extra::extract::CookieJar;
 use axum_macros::debug_handler;
 use clokwerk::AsyncScheduler;
 use clokwerk::Job;
-use log::error;
 use log::info;
 use rand::distributions::Alphanumeric;
 use rand::rngs::StdRng;
@@ -43,7 +42,7 @@ use tokio::sync::Mutex;
 use bin_stuff::next_bin_collection_date;
 use bin_stuff::User;
 
-use crate::email_sender::email_user;
+use crate::email_sender::{email_user, send_error_email};
 
 pub mod email_sender;
 
@@ -64,6 +63,7 @@ struct AppState {
     pool: SqlitePool,
     aws_client: Client,
     from_email_address: String,
+    error_email_address: String,
     geckodriver_url: String,
     admin_password: String,
     current_session_id: Arc<Mutex<Option<String>>>,
@@ -74,7 +74,7 @@ const CREATE_USER_ROUTE: &'static str = "/create_user";
 const RUN_SCRAPER_NOW_ROUTE: &'static str = "/run";
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() -> Result<(), Error> {
     // TODO: Environment based configs like dev/prod
     dotenv::dotenv().ok();
     let env = env_logger::Env::default().default_filter_or("info");
@@ -82,6 +82,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let from_email_address =
         env::var("FROM_EMAIL_ADDRESS").expect("FROM_EMAIL_ADDRESS must be specified");
+    let error_email_address =
+        env::var("ERROR_EMAIL_ADDRESS").expect("ERROR_EMAIL_ADDRESS must be specified");
     let _aws_access_key_id =
         env::var("AWS_ACCESS_KEY_ID").expect("AWS_ACCESS_KEY_ID must be specified");
     let _aws_secret_access_key =
@@ -121,6 +123,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         pool,
         aws_client,
         from_email_address,
+        error_email_address,
         geckodriver_url,
         admin_password,
         current_session_id: Arc::new(Mutex::new(None)),
@@ -186,10 +189,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     return Ok(());
 }
 
-async fn scrape_and_email_stuff(app_state: AppState) {
-    info!("Running email stuff now");
-    let people_to_notify = get_all_users(&app_state.pool).await.unwrap();
+async fn actually_scrape_and_email(app_state: &AppState) -> Result<(), anyhow::Error> {
+    let people_to_notify = get_all_users(&app_state.pool).await?;
     for user in &people_to_notify {
+        // TODO: Email user if the service failed?
         info!("Beginning scraping for {}", user.email);
         // TODO: Store the scraped date somewhere?
         //  What's the use? lets us separate emails i guess
@@ -198,8 +201,7 @@ async fn scrape_and_email_stuff(app_state: AppState) {
             &user.address,
             Some(app_state.geckodriver_url.clone()),
         )
-        .await
-        .unwrap();
+        .await?;
         let today = chrono::Utc::now().date_naive();
         let next_bin_collection = next_bin_collection_date(
             &bins,
@@ -209,16 +211,29 @@ async fn scrape_and_email_stuff(app_state: AppState) {
         info!("Beginning emailing for {}", user.email);
         // TODO: Keep track of users that have successfully been sent an email so a retry doesn't
         // happen unexpectedly
-        if let Err(e) = email_user(
+        email_user(
             user,
             &next_bin_collection,
             &app_state.aws_client,
             &app_state.from_email_address,
         )
-        .await
-        {
-            error!("{}", e);
-        }
+        .await?
+    }
+    return Ok(());
+}
+
+async fn scrape_and_email_stuff(app_state: AppState) {
+    info!("Running email stuff now");
+
+    // TODO: A dry run option would be nice to run an earlier scrape to alert for errors earlier
+    if let Err(e) = actually_scrape_and_email(&app_state).await {
+        send_error_email(
+            &app_state.aws_client,
+            &app_state.from_email_address,
+            &app_state.error_email_address,
+            e,
+        )
+        .await;
     }
 }
 
@@ -233,7 +248,7 @@ async fn submit_user_form(
     return redirect.into_response();
 }
 
-async fn create_user(pool: &SqlitePool, input: CreateUser) -> Result<User, Box<dyn Error>> {
+async fn create_user(pool: &SqlitePool, input: CreateUser) -> Result<User, Error> {
     let id = sqlx::query("INSERT INTO emails (email, postcode, address) VALUES (?1, ?2, ?3)")
         .bind(&input.email)
         .bind(&input.postcode)
@@ -250,7 +265,7 @@ async fn create_user(pool: &SqlitePool, input: CreateUser) -> Result<User, Box<d
     });
 }
 
-async fn get_all_users(pool: &SqlitePool) -> Result<Vec<User>, Box<dyn Error>> {
+async fn get_all_users(pool: &SqlitePool) -> Result<Vec<User>, Error> {
     // TODO: Paging at some point
     let users = sqlx::query("SELECT id, email, postcode, address FROM emails")
         .map(|row: SqliteRow| User {

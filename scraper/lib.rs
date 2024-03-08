@@ -1,4 +1,4 @@
-use std::error::Error;
+use anyhow::Error;
 
 use chrono::NaiveDate;
 use fantoccini::elements::Element;
@@ -12,7 +12,7 @@ pub async fn get_stuff(
     postcode: &str,
     address: &str,
     driver_url: Option<String>,
-) -> Result<Vec<BinDates>, Box<dyn Error>> {
+) -> Result<Vec<BinDates>, Error> {
     let mut capabilities = Capabilities::new();
     let options = serde_json::json!({ "args": ["--headless"] });
     capabilities.insert("moz:firefoxOptions".to_string(), options);
@@ -25,17 +25,10 @@ pub async fn get_stuff(
             default_driver_url
         );
     }
-    let client = match ClientBuilder::native()
+    let client = ClientBuilder::native()
         .capabilities(capabilities)
         .connect(&driver_url.unwrap_or("http://127.0.0.1:4444".to_string()))
-        .await
-    {
-        Ok(client) => client,
-        Err(e) => {
-            error!("{}", e);
-            return Err(Box::new(e));
-        }
-    };
+        .await?;
     info!("Got webdriver client");
 
     // NOTE: Some of the fields get different IDs when submitting each step it seems
@@ -115,7 +108,7 @@ async fn fill_out_address_form(
     client: &Client,
     postcode: &str,
     address: &str,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), Error> {
     let bins_url = "https://www.northlanarkshire.gov.uk/bin-collection-dates";
 
     let postcode_input_id = "address-finder-postcode-search-text";
@@ -193,9 +186,7 @@ async fn fill_out_address_form(
     return Ok(());
 }
 
-async fn get_bin_dates_from_elements(
-    elements: &Vec<Element>,
-) -> Result<Vec<String>, Box<dyn Error>> {
+async fn get_bin_dates_from_elements(elements: &Vec<Element>) -> Result<Vec<String>, Error> {
     let mut bin_dates = Vec::new();
     for element in elements {
         bin_dates.push(element.text().await?);

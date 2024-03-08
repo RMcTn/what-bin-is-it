@@ -1,17 +1,17 @@
-use std::error::Error;
+use anyhow::Error;
 
 use aws_sdk_sesv2::types::{Body, Content, Destination, EmailContent, Message};
-use chrono::Weekday;
 
 use bin_stuff::{NextBinCollection, User};
+use log::info;
 
 pub async fn email_user(
     user: &User,
     next_bin_collection: &NextBinCollection,
     aws_client: &aws_sdk_sesv2::Client,
     from_email_address: &str,
-) -> Result<(), Box<dyn Error>> {
-    let email = build_email_to_send(
+) -> Result<(), Error> {
+    let email = build_bin_email_to_send(
         &next_bin_collection,
         &user,
         &aws_client,
@@ -22,7 +22,51 @@ pub async fn email_user(
     return Ok(());
 }
 
-fn build_email_to_send(
+pub async fn send_error_email(
+    aws_client: &aws_sdk_sesv2::Client,
+    from_email_address: &str,
+    to_email_address: &str,
+    err: Error,
+) {
+    let destination_email = Destination::builder()
+        .to_addresses(to_email_address)
+        .build();
+
+    let subject_content = Content::builder()
+        .data("Error with what bin service")
+        .charset("UTF-8")
+        .build();
+
+    let body_content = Content::builder()
+        .data(format!("Error: {}", err))
+        .charset("UTF-8")
+        .build();
+
+    let body = Body::builder().text(body_content).build();
+
+    let msg = Message::builder()
+        .subject(subject_content)
+        .body(body)
+        .build();
+
+    dbg!(&msg);
+
+    let email_content = EmailContent::builder().simple(msg).build();
+    if let Err(e) = aws_client
+        .send_email()
+        .from_email_address(from_email_address)
+        .destination(destination_email)
+        .content(email_content)
+        .send()
+        .await
+    {
+        log::error!("Error sending error email (haha): {}", e);
+    } else {
+        info!("Error email sent to {}", to_email_address);
+    }
+}
+
+fn build_bin_email_to_send(
     next_bin_collection: &NextBinCollection,
     person: &User,
     aws_client: &aws_sdk_sesv2::Client,

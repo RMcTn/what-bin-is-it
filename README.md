@@ -16,6 +16,7 @@ See https://docs.aws.amazon.com/ses/latest/dg/setting-up.html for AWS related cr
 AWS_ACCESS_KEY_ID  
 AWS_SECRET_ACCESS_KEY  
 FROM_EMAIL_ADDRESS  
+ERROR_EMAIL_ADDRESS
 DATABASE_URL
 ADMIN_PASSWORD
 

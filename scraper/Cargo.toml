@@ -20,6 +20,7 @@ tokio = { version = "1.29.1", features = ["full"] }
 
 bin_stuff = { path="../bin_stuff" }
 log = "0.4.20"
+anyhow = "1.0.80"
 
 [lib]
 name = "scraper"

@@ -25,3 +25,4 @@ clokwerk = "0.4.0"
 openssl = { version = "0.10.57", features = ["vendored"] } # Need to vendor for cross compiling
 axum-extra = { version = "0.8.0", features = ["cookie", "cookie-private"] }
 rand = { version = "0.8.5", features = ["std_rng"] }
+anyhow = "1.0.80"
