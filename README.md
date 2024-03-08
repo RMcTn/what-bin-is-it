@@ -70,3 +70,6 @@ The `deploy-to-prod` make target will:
 make build-for-server
 make deploy-to-prod WHAT_BIN_HOST=<ip for host>
 ```
+
+## Run now
+If a file named `run-now` is found in the working directory of the program at startup, then the file is deleted, and scraping and sending of emails will begin immediately.  
