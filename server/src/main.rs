@@ -1,9 +1,5 @@
-// TODO: PLEASE - Sent an error email to ourselves when the web scraping fails
 // TODO: If geckodriver continues to be a pain in prod, maybe setup cronjob to restart geckodriver
 // every day or something?
-// TODO: Please stick a "retry" button in for the annoying failures. Until we move to some
-// job system anyway
-// TODO: Generic sign in redirect even for 404's? (If not signed in)
 #![allow(clippy::needless_return)]
 
 use anyhow::Error;
@@ -47,8 +43,6 @@ use crate::email_sender::{email_user, send_error_email};
 pub mod email_sender;
 
 // TODO: Dry run without emails
-
-// TODO: Auth for pages (Or just remove it for now?)
 
 // TODO:  Some gotchas that need solved:
 //  TODO: Not all house addresses are the same as what the site provides.
@@ -318,8 +312,6 @@ async fn auth_middleware<B>(
 #[debug_handler]
 async fn root_page(TypedHeader(cookie): TypedHeader<axum::headers::Cookie>) -> impl IntoResponse {
     if let Some(_session_id) = cookie.get("session_id") {
-        // TODO: Please stick a "retry" button in for the annoying failures. Until we move to some
-        // job system anyway
         let mut html = "<ul>".to_string();
         let users_page_link = format!("<li><a href='{}'>Users</a></li>", USERS_ROUTE);
         let create_user_link = format!("<li><a href='{}'>Create User</a></li>", CREATE_USER_ROUTE);
