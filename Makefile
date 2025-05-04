@@ -56,6 +56,7 @@ deploy-caddy:
 	make host-set-check
 	# TODO: Check the default caddyfile doesn't have important things we've not included in our caddyfile
 	scp -r ./Caddyfile ${USER}@${WHAT_BIN_HOST}:/etc/caddy/Caddyfile # Default caddyfile config location in the systemd service
+	ssh ${USER}@${WHAT_BIN_HOST} "systemctl restart caddy"
 
 BIN_SERVICE=whatbin.service
 GECKODRIVER_SERVICE=geckodriver.service
